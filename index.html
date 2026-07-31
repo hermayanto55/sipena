@@ -268,7 +268,8 @@
   <div id="sipena-runtime-marker" class="hidden"
        data-runtime="<?= runtimeMarker ?>"
        data-webapp-url="<?= webAppUrl ?>"
-       data-build="<?= buildVersion ?>"></div>
+       data-build="<?= buildVersion ?>"
+       data-initial-page="<?= initialPage ?>"></div>
 
   <div id="gas-connection-gate" class="fixed inset-0 z-[2147483647] hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
     <div class="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
@@ -286,7 +287,7 @@
       </div>
       <div class="mt-5">
         <label class="text-xs font-bold text-slate-700">URL Web App Apps Script</label>
-        <input id="gas-webapp-url-input" type="url" class="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-800" placeholder="https://script.google.com/macros/s/DEPLOYMENT_ID/exec">
+        <input id="gas-webapp-url-input" type="url" class="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-800" placeholder="">https://script.google.com/macros/s/AKfycbxbycmwq4KtbpYCMrLeuOOpErhY-skC28FIotPwtJzWlQXA6vi4fS3vmse-j3mTpr82/exec
       </div>
       <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button type="button" onclick="openConfiguredGasApp('lapor')" class="rounded-xl bg-red-900 px-4 py-3 text-sm font-extrabold text-white hover:bg-red-800">
@@ -408,6 +409,7 @@
           <nav class="hidden md:flex space-x-2">
             <button onclick="navigateTo('lapor')" id="nav-lapor" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-white bg-red-850"><i class="fa-solid fa-pen-to-square"></i> Buat Laporan</button>
             <button onclick="navigateTo('lacak')" id="nav-lacak" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-magnifying-glass"></i> Lacak Aduan</button>
+            <button type="button" onclick="return openLoginPage(event)" id="nav-login" class="px-4 py-2 rounded-xl text-sm font-extrabold transition flex items-center gap-2 bg-yellow-400 hover:bg-yellow-300 text-red-950 shadow-md"><i class="fa-solid fa-right-to-bracket"></i> Login Petugas</button>
             <button onclick="navigateTo('dashboard')" id="nav-dashboard" class="hidden nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
             <button onclick="logout()" id="nav-logout" class="hidden px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 transition text-white flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
           </nav>
@@ -420,6 +422,7 @@
       <div id="mobile-menu" class="hidden md:hidden bg-red-950 px-4 pt-2 pb-4 space-y-1 shadow-inner">
         <button onclick="navigateTo('lapor');toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
         <button onclick="navigateTo('lacak');toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
+        <button type="button" onclick="return openLoginPage(event, true)" id="nav-login-mobile" class="block w-full text-left px-3 py-2 rounded-md text-base font-extrabold bg-yellow-400 text-red-950 hover:bg-yellow-300"><i class="fa-solid fa-right-to-bracket mr-2"></i>Login Petugas</button>
         <button onclick="navigateTo('dashboard');toggleMobileMenu()" id="nav-dashboard-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-chart-line mr-2"></i>Dashboard</button>
         <button onclick="logout();toggleMobileMenu()" id="nav-logout-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium bg-amber-600 text-white hover:bg-amber-700"><i class="fa-solid fa-right-from-bracket mr-2"></i>Logout</button>
       </div>
@@ -628,6 +631,9 @@
             </div>
             <h2 class="text-lg font-bold">Portal Login Petugas</h2>
             <p class="text-xs text-red-200">Halaman masuk petugas terenkripsi dan dibatasi.</p>
+            <button type="button" onclick="navigateTo('lapor')" class="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20">
+              <i class="fa-solid fa-arrow-left"></i>Kembali ke Beranda
+            </button>
           </div>
           <form id="form-login" onsubmit="handleLogin(event)" class="p-6 space-y-4">
             <div id="login-connection-status" class="hidden rounded-xl border px-3 py-2 text-xs font-semibold"></div>
@@ -983,7 +989,8 @@
       return {
         runtime: String(el?.dataset?.runtime || ''),
         webAppUrl: String(el?.dataset?.webappUrl || ''),
-        build: String(el?.dataset?.build || '')
+        build: String(el?.dataset?.build || ''),
+        initialPage: String(el?.dataset?.initialPage || 'lapor')
       };
     }
 
@@ -1114,22 +1121,37 @@
 
     const VALID_ROUTES = ['lapor', 'lacak', 'login', 'dashboard'];
     let CURRENT_ROUTE = 'lapor';
+    let USER_ROUTE_OVERRIDE = '';
+    let USER_ROUTE_CHANGED_AT = 0;
 
     function normalizeRoute(value) {
       const route = String(value || '').replace(/^#/, '').trim().toLowerCase();
       return VALID_ROUTES.includes(route) ? route : 'lapor';
     }
 
-    function getWebAppLocation() {
+    function getWebAppLocation(timeoutMs = 2500) {
       return new Promise(resolve => {
+        let finished = false;
+        const finish = value => {
+          if (finished) return;
+          finished = true;
+          resolve(value || {});
+        };
+        const fallback = () => finish({
+          hash: String(window.location.hash || '').replace(/^#/, ''),
+          parameter: {page: runtimeInfo().initialPage || 'lapor'}
+        });
+        const timer = setTimeout(fallback, timeoutMs);
+
         if (window.google && window.google.script && window.google.script.url && typeof window.google.script.url.getLocation === 'function') {
-          window.google.script.url.getLocation(location => resolve(location || {}));
+          window.google.script.url.getLocation(location => {
+            clearTimeout(timer);
+            finish(location || {});
+          });
           return;
         }
-        resolve({
-          hash: String(window.location.hash || '').replace(/^#/, ''),
-          parameter: {}
-        });
+        clearTimeout(timer);
+        fallback();
       });
     }
 
@@ -1143,7 +1165,8 @@
             location?.hash ||
             'lapor'
           );
-          applyRoute(route);
+          const recentDirectNavigation = USER_ROUTE_OVERRIDE && (Date.now() - USER_ROUTE_CHANGED_AT < 1500);
+          applyRoute(recentDirectNavigation ? USER_ROUTE_OVERRIDE : route);
         });
         return;
       }
@@ -1156,25 +1179,86 @@
     function navigateTo(route, replaceHistory = false) {
       const normalized = normalizeRoute(route);
       CURRENT_ROUTE = normalized;
+      USER_ROUTE_OVERRIDE = normalized;
+      USER_ROUTE_CHANGED_AT = Date.now();
 
-      if (window.google && window.google.script && window.google.script.history) {
-        const state = {page: normalized};
-        const params = {page: normalized};
-        if (replaceHistory && typeof window.google.script.history.replace === 'function') {
-          window.google.script.history.replace(state, params, normalized);
-        } else if (typeof window.google.script.history.push === 'function') {
-          window.google.script.history.push(state, params, normalized);
+      // Render lebih dahulu. Kegagalan history Apps Script tidak boleh
+      // membatalkan perpindahan halaman di antarmuka.
+      applyRoute(normalized);
+
+      try {
+        if (window.google && window.google.script && window.google.script.history) {
+          const state = {page: normalized};
+          const params = {page: normalized};
+          if (replaceHistory && typeof window.google.script.history.replace === 'function') {
+            window.google.script.history.replace(state, params, normalized);
+          } else if (typeof window.google.script.history.push === 'function') {
+            window.google.script.history.push(state, params, normalized);
+          }
+        } else if (window.location.hash !== '#' + normalized) {
+          window.location.hash = '#' + normalized;
         }
-      } else if (window.location.hash !== '#' + normalized) {
-        window.location.hash = '#' + normalized;
+      } catch (error) {
+        console.warn('Riwayat URL tidak dapat diperbarui, tetapi halaman tetap dibuka.', error);
+      }
+    }
+
+    function openLoginPage(event, closeMobileMenu = false) {
+      if (event && typeof event.preventDefault === 'function') event.preventDefault();
+
+      USER_ROUTE_OVERRIDE = 'login';
+      USER_ROUTE_CHANGED_AT = Date.now();
+      CURRENT_ROUTE = 'login';
+
+      // Tampilkan halaman login secara langsung tanpa menunggu Spreadsheet,
+      // ping backend, atau pembaruan URL.
+      switchTab('login');
+      window.scrollTo({top: 0, behavior: 'smooth'});
+
+      if (closeMobileMenu) {
+        const menu = document.getElementById('mobile-menu');
+        const icon = document.getElementById('menu-icon');
+        if (menu && !menu.classList.contains('hidden')) menu.classList.add('hidden');
+        if (icon) {
+          icon.classList.add('fa-bars');
+          icon.classList.remove('fa-xmark');
+        }
       }
 
-      applyRoute(normalized);
+      // Pemeriksaan backend dilakukan setelah form sudah terlihat.
+      Promise.resolve().then(checkLoginConnection).catch(error => {
+        console.warn('Pemeriksaan koneksi login gagal.', error);
+      });
+
+      setTimeout(() => {
+        const username = document.getElementById('username');
+        if (username) username.focus();
+      }, 120);
+
+      // Pembaruan route hanya best-effort dan tidak boleh menghalangi UI.
+      setTimeout(() => {
+        try {
+          if (window.google && window.google.script && window.google.script.history && typeof window.google.script.history.push === 'function') {
+            window.google.script.history.push({page:'login'}, {page:'login'}, 'login');
+          } else if (window.location.hash !== '#login') {
+            window.location.hash = '#login';
+          }
+        } catch (error) {
+          console.warn('URL login tidak dapat diperbarui.', error);
+        }
+      }, 0);
+
+      return false;
     }
 
     async function bootApp() {
       document.getElementById('preview-banner').style.display = IS_PREVIEW ? 'flex' : 'none';
       setPelaporType('anonim');
+
+      // Tampilkan route dari parameter doGet seketika. Ini memastikan
+      // ?page=login membuka form login walaupun backend/Spreadsheet lambat.
+      const injectedRoute = normalizeRoute(runtimeInfo().initialPage || 'lapor');
+      applyRoute(injectedRoute);
 
       if (!IS_PREVIEW) {
         try {
@@ -1211,9 +1295,10 @@
       const initialRoute = normalizeRoute(
         location?.parameter?.page ||
         location?.hash ||
-        'lapor'
+        injectedRoute
       );
-      applyRoute(initialRoute);
+      const routeAfterBoot = USER_ROUTE_OVERRIDE || initialRoute;
+      applyRoute(routeAfterBoot);
     }
 
     function applyRoute(route) {
@@ -1658,6 +1743,8 @@
       if(sideName) sideName.innerText = user.nama_petugas||user.username;
       document.getElementById('role-badge').innerText = user.role||'-';
       
+      document.getElementById('nav-login')?.classList.add('hidden');
+      document.getElementById('nav-login-mobile')?.classList.add('hidden');
       document.getElementById('nav-logout').classList.remove('hidden');
       document.getElementById('nav-logout-mobile').classList.remove('hidden');
       document.getElementById('nav-dashboard').classList.remove('hidden');
@@ -1681,6 +1768,7 @@
       storageRemove('sipena_session_token');
       storageRemove('kpu_current_user');
       ['nav-logout','nav-logout-mobile','nav-dashboard','nav-dashboard-mobile'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+      ['nav-login','nav-login-mobile'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
       document.getElementById('admin-menu').classList.add('hidden');
       document.getElementById('form-pengaduan')?.reset();
       switchTab('login');
