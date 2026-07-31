@@ -592,6 +592,7 @@
             <p class="text-xs text-red-200">Halaman masuk petugas terenkripsi dan dibatasi.</p>
           </div>
           <form id="form-login" onsubmit="handleLogin(event)" class="p-6 space-y-4">
+            <div id="login-connection-status" class="hidden rounded-xl border px-3 py-2 text-xs font-semibold"></div>
             <div>
               <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
               <input id="username" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Username">
@@ -909,9 +910,32 @@
 
     function gasCall(request) {
       return new Promise((resolve, reject) => {
+        if (!(window.google && google.script && google.script.run)) {
+          reject(new Error('Frontend tidak terhubung ke Google Apps Script. Buka aplikasi melalui URL deployment Web App, bukan file index.html langsung atau GitHub Pages.'));
+          return;
+        }
+
+        let finished = false;
+        const timeoutId = setTimeout(() => {
+          if (finished) return;
+          finished = true;
+          reject(new Error('Backend tidak merespons dalam 30 detik. Periksa deployment dan izin akses Web App.'));
+        }, 30000);
+
         google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(error => reject(new Error(error && error.message ? error.message : String(error))))
+          .withSuccessHandler(result => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeoutId);
+            resolve(result);
+          })
+          .withFailureHandler(error => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeoutId);
+            const message = error && error.message ? error.message : String(error || 'Kesalahan Google Apps Script');
+            reject(new Error(message));
+          })
           .apiRequest(request);
       });
     }
@@ -991,7 +1015,10 @@
       const hash = window.location.hash;
       if (hash === '#login') {
         if (currentUser) enterDashboard(currentUser);
-        else switchTab('login');
+        else {
+          switchTab('login');
+          checkLoginConnection();
+        }
       } else if (hash === '#lacak') {
         switchTab('lacak');
       } else if (hash === '#lapor' || hash === '') {
@@ -1010,6 +1037,38 @@
     async function apiPost(payload) {
       if(IS_PREVIEW) return previewPost(payload);
       return await gasCall({method:'POST', action:payload.action, payload, token:SESSION_TOKEN});
+    }
+
+    function setLoginConnectionStatus(message, type='info') {
+      const box = document.getElementById('login-connection-status');
+      if (!box) return;
+      box.classList.remove('hidden','bg-blue-50','border-blue-200','text-blue-800','bg-green-50','border-green-200','text-green-800','bg-red-50','border-red-200','text-red-800');
+      const classes = type === 'success'
+        ? ['bg-green-50','border-green-200','text-green-800']
+        : type === 'error'
+          ? ['bg-red-50','border-red-200','text-red-800']
+          : ['bg-blue-50','border-blue-200','text-blue-800'];
+      box.classList.add(...classes);
+      box.textContent = message;
+    }
+
+    async function checkLoginConnection() {
+      setLoginConnectionStatus('Memeriksa koneksi backend...', 'info');
+      try {
+        const result = await apiGet('ping');
+        if (!result || result.status !== 'success') {
+          throw new Error(result?.message || 'Backend mengembalikan respons tidak valid.');
+        }
+        if (Number(result.active_admins_count || 0) < 1) {
+          setLoginConnectionStatus('Backend terhubung, tetapi akun admin aktif belum tersedia. Jalankan repairAdminLogin() di Apps Script.', 'error');
+          return false;
+        }
+        setLoginConnectionStatus('Backend dan database terhubung. Silakan login.', 'success');
+        return true;
+      } catch (err) {
+        setLoginConnectionStatus(err.message || 'Koneksi backend gagal.', 'error');
+        return false;
+      }
     }
 
     async function refreshPublicData() {
@@ -1297,22 +1356,38 @@
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Memeriksa...';
       try {
-        const res = await apiGet('login', {
-          username: document.getElementById('username').value.trim().toLowerCase(),
-          password: document.getElementById('password').value.trim()
+        const connected = await checkLoginConnection();
+        if (!connected) return;
+
+        // Hapus token lama agar tidak mengganggu proses autentikasi baru.
+        SESSION_TOKEN = '';
+        localStorage.removeItem('sipena_session_token');
+        localStorage.removeItem('kpu_current_user');
+
+        const username = document.getElementById('username').value.trim().toLowerCase();
+        const password = document.getElementById('password').value; // jangan trim password
+        const res = await apiPost({
+          action:'login',
+          data:{username, password}
         });
-        if(res.status === 'success') {
-          SESSION_TOKEN = res.token || '';
+
+        if(res && res.status === 'success' && res.token && res.data) {
+          SESSION_TOKEN = res.token;
           localStorage.setItem('sipena_session_token', SESSION_TOKEN);
           currentUser = res.data;
           localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+          setLoginConnectionStatus('Login berhasil. Membuka dashboard...', 'success');
           enterDashboard(currentUser);
           showToast('Selamat datang kembali, login berhasil.');
         } else {
-          showToast(res.message || 'Username atau password salah', 'error');
+          const message = res?.message || 'Username atau password salah.';
+          setLoginConnectionStatus(message, 'error');
+          showToast(message, 'error');
         }
       } catch(err) {
-        showToast('Koneksi login bermasalah', 'error');
+        const message = err?.message || 'Koneksi login bermasalah.';
+        setLoginConnectionStatus(message, 'error');
+        showToast(message, 'error');
         console.error(err);
       } finally {
         btn.disabled = false;
