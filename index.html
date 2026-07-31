@@ -1,517 +1,3 @@
-<?php
-/**
- * SIPENA / Aplikasi Pengaduan Online KPU Kab. Tanjung Jabung Timur
- * Versi SQL Native: PHP + MySQL/MariaDB
- * ------------------------------------------------------------
- * Cara pakai:
- * 1. Import file database.sql ke phpMyAdmin/MySQL.
- * 2. Ubah konfigurasi DB di bawah ini sesuai hosting/local server.
- * 3. Upload file ini sebagai index.php / sipena.php.
- */
-
-// ================= KONFIGURASI DATABASE =================
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'pengaduan_kpu');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-
-define('DB_CHARSET', 'utf8mb4');
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-
-function current_session_user() {
-    return $_SESSION['sipena_user'] ?? null;
-}
-
-function require_session_role($roles = []) {
-    $user = current_session_user();
-    if (!$user) json_response(['status'=>'error', 'message'=>'Sesi login berakhir. Silakan masuk kembali.'], 401);
-    if ($roles) {
-        $role = strtolower((string)($user['role'] ?? ''));
-        $allowed = array_map('strtolower', $roles);
-        if (!in_array($role, $allowed, true)) {
-            json_response(['status'=>'error', 'message'=>'Anda tidak memiliki hak akses untuk tindakan ini.'], 403);
-        }
-    }
-    return $user;
-}
-
-function db() {
-    static $pdo = null;
-    if ($pdo === null) {
-        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
-        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
-    }
-    return $pdo;
-}
-
-function json_response($arr, $code = 200) {
-    http_response_code($code);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode($arr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-function clean($value) {
-    return is_string($value) ? trim($value) : $value;
-}
-
-function to_mysql_datetime($value) {
-    $value = clean($value);
-    if (!$value) return null;
-    $ts = strtotime($value);
-    return $ts ? date('Y-m-d H:i:s', $ts) : null;
-}
-
-function get_json_body() {
-    $raw = file_get_contents('php://input');
-    $data = json_decode($raw, true);
-    return is_array($data) ? $data : [];
-}
-
-function ensure_ticket_id() {
-    return 'KPU-TJT-' . date('Y') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
-}
-
-function get_settings() {
-    $stmt = db()->query("SELECT setting_key, setting_value FROM settings");
-    $out = [];
-    foreach ($stmt->fetchAll() as $r) {
-        $out[$r['setting_key']] = $r['setting_value'];
-    }
-    return $out;
-}
-
-function save_settings($data) {
-    $stmt = db()->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-    foreach ($data as $key => $value) {
-        $stmt->execute([$key, is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value]);
-    }
-}
-
-function setting_is_true($value) {
-    return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on', 'aktif'], true);
-}
-
-function normalize_wa_number_php($number) {
-    $number = trim((string)$number);
-    if ($number === '' || $number === '-') return '';
-    if (strpos($number, '@g.us') !== false) return preg_replace('/\s+/', '', $number);
-    $digits = preg_replace('/\D+/', '', $number);
-    if ($digits === '') return '';
-    if (strpos($digits, '0') === 0) $digits = '62' . substr($digits, 1);
-    elseif (strpos($digits, '8') === 0) $digits = '62' . $digits;
-    return $digits;
-}
-
-function wa_me_url_php($number, $message) {
-    $target = normalize_wa_number_php($number);
-    if ($target === '' || strpos($target, '@g.us') !== false) return '';
-    return 'https://wa.me/' . rawurlencode($target) . '?text=' . rawurlencode($message);
-}
-
-function sipena_public_url() {
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443);
-    $scheme = $https ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? '';
-    $path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
-    return $host ? ($scheme . '://' . $host . $path) : '';
-}
-
-function send_fonnte_message($target, $message, $settings = null) {
-    $settings = is_array($settings) ? $settings : get_settings();
-    if (!setting_is_true($settings['wa_enabled'] ?? 'false')) {
-        return ['attempted'=>false, 'success'=>false, 'message'=>'Gateway WhatsApp belum diaktifkan.'];
-    }
-
-    $token = trim((string)($settings['wa_token'] ?? ''));
-    $target = normalize_wa_number_php($target);
-    if ($token === '' || $target === '') {
-        return ['attempted'=>false, 'success'=>false, 'message'=>'Token atau nomor tujuan belum lengkap.'];
-    }
-    if (!function_exists('curl_init')) {
-        return ['attempted'=>true, 'success'=>false, 'message'=>'Ekstensi cURL PHP belum aktif di hosting.'];
-    }
-
-    $curl = curl_init();
-    curl_setopt_array($curl, [
-        CURLOPT_URL => 'https://api.fonnte.com/send',
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => 20,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_CUSTOMREQUEST => 'POST',
-        CURLOPT_POSTFIELDS => [
-            'target' => $target,
-            'message' => $message,
-            'countryCode' => '62',
-        ],
-        CURLOPT_HTTPHEADER => ['Authorization: ' . $token],
-    ]);
-    $raw = curl_exec($curl);
-    $error = curl_error($curl);
-    $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
-
-    if ($raw === false || $error !== '') {
-        return ['attempted'=>true, 'success'=>false, 'message'=>'Koneksi Fonnte gagal: ' . $error];
-    }
-    $decoded = json_decode($raw, true);
-    $success = $httpCode >= 200 && $httpCode < 300;
-    if (is_array($decoded) && array_key_exists('status', $decoded)) {
-        $v = $decoded['status'];
-        $success = $success && ($v === true || $v === 'true' || $v === 1 || $v === '1');
-    }
-    return [
-        'attempted'=>true,
-        'success'=>$success,
-        'message'=>$success ? 'Notifikasi WhatsApp berhasil dikirim.' : 'Gateway WhatsApp menolak pengiriman.',
-        'http_code'=>$httpCode,
-        'response'=>is_array($decoded) ? $decoded : $raw,
-    ];
-}
-
-function reporter_notification_message($report, $status = null, $response = '') {
-    $status = trim((string)($status ?: ($report['status'] ?? 'Pending')));
-    $name = trim((string)($report['nama_pelapor'] ?? 'Bapak/Ibu Pelapor'));
-    if ($name === '' || stripos($name, 'anonim') !== false || stripos($name, 'rahasia') !== false) $name = 'Bapak/Ibu Pelapor';
-    $ticket = trim((string)($report['ticket_id'] ?? '-'));
-    $category = trim((string)($report['kategori'] ?? '-'));
-    $subject = trim((string)($report['subjek'] ?? '-'));
-    $response = trim((string)$response);
-    $trackUrl = sipena_public_url();
-
-    if ($status === 'Pending' || $status === 'Diterima') {
-        $title = '*SIPENA – Pengaduan Diterima*';
-        $body = 'Pengaduan Anda telah berhasil diterima dan akan diverifikasi oleh petugas.';
-    } elseif ($status === 'Diproses') {
-        $title = '*SIPENA – Informasi Tindak Lanjut*';
-        $body = 'Pengaduan Anda telah diverifikasi dan sedang ditindaklanjuti oleh petugas.';
-    } elseif ($status === 'Perlu Informasi Tambahan') {
-        $title = '*SIPENA – Permintaan Informasi Tambahan*';
-        $body = 'Petugas membutuhkan informasi atau bukti tambahan untuk melanjutkan penanganan pengaduan.';
-    } elseif ($status === 'Selesai') {
-        $title = '*SIPENA – Pengaduan Selesai*';
-        $body = 'Pengaduan Anda telah selesai ditindaklanjuti.';
-    } elseif ($status === 'Ditolak') {
-        $title = '*SIPENA – Informasi Status Pengaduan*';
-        $body = 'Pengaduan Anda belum dapat ditindaklanjuti atau tidak memenuhi persyaratan.';
-    } else {
-        $title = '*SIPENA – Pembaruan Pengaduan*';
-        $body = 'Status pengaduan Anda telah diperbarui.';
-    }
-
-    $message = $title . "\n\nYth. " . $name . ",\n\n" . $body . "\n\n";
-    $message .= "*Kode Tiket:* " . $ticket . "\n";
-    $message .= "*Kategori:* " . $category . "\n";
-    $message .= "*Subjek:* " . $subject . "\n";
-    $message .= "*Status:* " . $status . "\n";
-    if ($response !== '') $message .= "\n*Tanggapan Petugas:*\n" . $response . "\n";
-    if ($trackUrl !== '') $message .= "\nLacak perkembangan melalui:\n" . $trackUrl . "#lacak\n";
-    $message .= "\nTerima kasih telah membantu meningkatkan kualitas pelayanan KPU Kabupaten Tanjung Jabung Timur.";
-    return $message;
-}
-
-function staff_new_report_message($report) {
-    $message = "*SIPENA – Pengaduan Baru*\n\nTerdapat pengaduan masyarakat yang perlu diperiksa.\n\n";
-    $message .= "*Kode Tiket:* " . ($report['ticket_id'] ?? '-') . "\n";
-    $message .= "*Waktu Masuk:* " . date('d-m-Y H:i') . " WIB\n";
-    $message .= "*Kategori:* " . ($report['kategori'] ?? '-') . "\n";
-    $message .= "*Subjek:* " . ($report['subjek'] ?? '-') . "\n";
-    $message .= "*Pelapor:* " . ($report['nama_pelapor'] ?? '-') . "\n";
-    $message .= "*Kontak:* " . ($report['kontak_pelapor'] ?? '-') . "\n\n";
-    $message .= "Silakan login ke dashboard SIPENA untuk melakukan verifikasi dan tindak lanjut.";
-    return $message;
-}
-
-function staff_status_message($report, $status) {
-    $message = "*SIPENA – Pembaruan Tindak Lanjut*\n\n";
-    $message .= "*Kode Tiket:* " . ($report['ticket_id'] ?? '-') . "\n";
-    $message .= "*Kategori:* " . ($report['kategori'] ?? '-') . "\n";
-    $message .= "*Subjek:* " . ($report['subjek'] ?? '-') . "\n";
-    $message .= "*Status terbaru:* " . $status . "\n";
-    if (!empty($report['tanggapan_admin'])) $message .= "\n*Tanggapan Petugas:*\n" . $report['tanggapan_admin'] . "\n";
-    return $message;
-}
-
-
-function api_get($action) {
-    switch ($action) {
-        case 'login':
-            $username = strtolower(clean($_GET['username'] ?? ''));
-            $password = clean($_GET['password'] ?? '');
-            $stmt = db()->prepare("SELECT username, password, nama_petugas, role FROM users WHERE LOWER(username)=? LIMIT 1");
-            $stmt->execute([$username]);
-            $u = $stmt->fetch();
-            // Mendukung password plaintext lama dan hash password_hash untuk pengembangan berikutnya.
-            $ok = $u && (($u['password'] === $password) || password_verify($password, $u['password']));
-            if (!$ok) json_response(['status'=>'error', 'message'=>'Username atau password salah.'], 401);
-            unset($u['password']);
-            $_SESSION['sipena_user'] = $u;
-            session_regenerate_id(true);
-            json_response(['status'=>'success', 'data'=>$u]);
-
-        case 'getSession':
-            $user = current_session_user();
-            json_response(['status'=>'success', 'data'=>$user]);
-
-        case 'logout':
-            $_SESSION = [];
-            if (ini_get('session.use_cookies')) {
-                $params = session_get_cookie_params();
-                setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
-            }
-            session_destroy();
-            json_response(['status'=>'success', 'message'=>'Sesi telah ditutup.']);
-
-        case 'getSettings':
-            $publicSettings = get_settings();
-            unset($publicSettings['wa_token'], $publicSettings['wa_target']);
-            json_response(['status'=>'success', 'data'=>$publicSettings]);
-
-        case 'getAdminSettings':
-            require_session_role(['admin']);
-            json_response(['status'=>'success', 'data'=>get_settings()]);
-
-        case 'getPublicStats':
-            $total = (int)db()->query("SELECT COUNT(*) FROM reports")->fetchColumn();
-            $selesai = (int)db()->query("SELECT COUNT(*) FROM reports WHERE LOWER(status)='selesai'")->fetchColumn();
-            json_response(['status'=>'success', 'data'=>['total'=>$total, 'selesai'=>$selesai]]);
-
-        case 'getCategories':
-            $rows = db()->query("SELECT nama_kategori FROM categories ORDER BY nama_kategori ASC")->fetchAll(PDO::FETCH_COLUMN);
-            json_response(['status'=>'success', 'data'=>$rows]);
-
-        case 'getAllReports':
-            require_session_role(['admin', 'petugas']);
-            $rows = db()->query("SELECT ticket_id, tanggal_masuk, kategori, subjek, deskripsi, nama_pelapor, kontak_pelapor, bukti_link, status, tanggapan_admin, tanggal_update FROM reports ORDER BY COALESCE(tanggal_masuk, created_at) DESC, id DESC")->fetchAll();
-            json_response(['status'=>'success', 'data'=>$rows]);
-
-        case 'getUsers':
-            require_session_role(['admin']);
-            // Password (hash) sengaja TIDAK dikirim ke frontend demi keamanan
-            $rows = db()->query("SELECT username, nama_petugas, nip, email, role FROM users ORDER BY role ASC, nama_petugas ASC, username ASC")->fetchAll();
-            json_response(['status'=>'success', 'data'=>$rows]);
-
-        case 'trackReport':
-            $ticket = clean($_GET['ticketId'] ?? '');
-            $stmt = db()->prepare("SELECT ticket_id, tanggal_masuk, kategori, subjek, deskripsi, nama_pelapor, kontak_pelapor, bukti_link, status, tanggapan_admin, tanggal_update FROM reports WHERE ticket_id=? LIMIT 1");
-            $stmt->execute([$ticket]);
-            $r = $stmt->fetch();
-            if (!$r) json_response(['status'=>'error', 'message'=>'Tiket tidak ditemukan.'], 404);
-            json_response(['status'=>'success', 'data'=>$r]);
-
-        default:
-            json_response(['status'=>'error', 'message'=>'Action GET tidak dikenali.'], 400);
-    }
-}
-
-function api_post($payload) {
-    $action = $payload['action'] ?? '';
-    switch ($action) {
-        case 'submitReport':
-            $d = $payload['data'] ?? [];
-            $ticket = clean($d['ticket_id'] ?? '') ?: ensure_ticket_id();
-            $report = [
-                'ticket_id' => $ticket,
-                'tanggal_masuk' => to_mysql_datetime($d['tanggal_masuk'] ?? '') ?: date('Y-m-d H:i:s'),
-                'kategori' => clean($d['kategori'] ?? ''),
-                'subjek' => clean($d['subjek'] ?? ''),
-                'deskripsi' => clean($d['deskripsi'] ?? ''),
-                'nama_pelapor' => clean($d['nama_pelapor'] ?? 'Rahasia / Anonim'),
-                'kontak_pelapor' => clean($d['kontak_pelapor'] ?? '-'),
-                'bukti_link' => clean($d['bukti_link'] ?? ''),
-                'status' => clean($d['status'] ?? 'Pending') ?: 'Pending',
-                'tanggapan_admin' => clean($d['tanggapan_admin'] ?? ''),
-                'tanggal_update' => to_mysql_datetime($d['tanggal_update'] ?? ''),
-            ];
-            $stmt = db()->prepare("INSERT INTO reports (ticket_id, tanggal_masuk, kategori, subjek, deskripsi, nama_pelapor, kontak_pelapor, bukti_link, status, tanggapan_admin, tanggal_update) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $report['ticket_id'], $report['tanggal_masuk'], $report['kategori'], $report['subjek'],
-                $report['deskripsi'], $report['nama_pelapor'], $report['kontak_pelapor'],
-                $report['bukti_link'], $report['status'], $report['tanggapan_admin'], $report['tanggal_update'],
-            ]);
-
-            $settings = get_settings();
-            $staffResult = ['attempted'=>false, 'success'=>false, 'message'=>'Notifikasi petugas tidak diaktifkan.'];
-            $reporterResult = ['attempted'=>false, 'success'=>false, 'message'=>'Notifikasi pelapor tidak diaktifkan.'];
-
-            if (setting_is_true($settings['wa_auto_staff'] ?? 'true')) {
-                $staffResult = send_fonnte_message($settings['wa_target'] ?? '', staff_new_report_message($report), $settings);
-            }
-            $reporterNumber = normalize_wa_number_php($report['kontak_pelapor']);
-            if ($reporterNumber !== '' && setting_is_true($settings['wa_auto_reporter'] ?? 'true')) {
-                $reporterResult = send_fonnte_message($reporterNumber, reporter_notification_message($report, 'Diterima'), $settings);
-            }
-            $officeFallback = wa_me_url_php($settings['contact_phone'] ?? '', staff_new_report_message($report));
-
-            json_response([
-                'status'=>'success',
-                'message'=>'Aduan berhasil dikirim.',
-                'ticket_id'=>$ticket,
-                'notifications'=>['staff'=>$staffResult, 'reporter'=>$reporterResult],
-                'office_wa_fallback'=>$officeFallback,
-            ]);
-
-        case 'updateReportStatus':
-            require_session_role(['admin', 'petugas']);
-            $ticketId = clean($payload['ticketId'] ?? '');
-            $status = clean($payload['status'] ?? 'Pending');
-            $responseText = clean($payload['tanggapan'] ?? '');
-            $sendNotification = filter_var($payload['send_notification'] ?? false, FILTER_VALIDATE_BOOLEAN);
-
-            $stmt = db()->prepare("UPDATE reports SET status=?, tanggapan_admin=?, tanggal_update=NOW() WHERE ticket_id=?");
-            $stmt->execute([$status, $responseText, $ticketId]);
-
-            $fetch = db()->prepare("SELECT ticket_id, tanggal_masuk, kategori, subjek, deskripsi, nama_pelapor, kontak_pelapor, bukti_link, status, tanggapan_admin, tanggal_update FROM reports WHERE ticket_id=? LIMIT 1");
-            $fetch->execute([$ticketId]);
-            $report = $fetch->fetch();
-            if (!$report) json_response(['status'=>'error', 'message'=>'Tiket tidak ditemukan setelah pembaruan.'], 404);
-
-            $settings = get_settings();
-            $notifyResult = ['attempted'=>false, 'success'=>false, 'message'=>'Notifikasi tidak diminta.'];
-            $fallbackUrl = '';
-            if ($sendNotification) {
-                $message = reporter_notification_message($report, $status, $responseText);
-                $notifyResult = send_fonnte_message($report['kontak_pelapor'] ?? '', $message, $settings);
-                if (!$notifyResult['success']) $fallbackUrl = wa_me_url_php($report['kontak_pelapor'] ?? '', $message);
-            }
-            if (setting_is_true($settings['wa_auto_staff_status'] ?? 'false') && in_array($status, ['Selesai', 'Ditolak'], true)) {
-                send_fonnte_message($settings['wa_target'] ?? '', staff_status_message($report, $status), $settings);
-            }
-            json_response([
-                'status'=>'success',
-                'message'=>'Status tiket diperbarui.',
-                'notification'=>$notifyResult,
-                'wa_fallback_url'=>$fallbackUrl,
-            ]);
-
-        case 'sendReporterNotification':
-            require_session_role(['admin', 'petugas']);
-            $ticketId = clean($payload['ticketId'] ?? '');
-            $fetch = db()->prepare("SELECT ticket_id, tanggal_masuk, kategori, subjek, deskripsi, nama_pelapor, kontak_pelapor, bukti_link, status, tanggapan_admin, tanggal_update FROM reports WHERE ticket_id=? LIMIT 1");
-            $fetch->execute([$ticketId]);
-            $report = $fetch->fetch();
-            if (!$report) json_response(['status'=>'error', 'message'=>'Tiket tidak ditemukan.'], 404);
-
-            $message = reporter_notification_message($report, $report['status'] ?? 'Pending', $report['tanggapan_admin'] ?? '');
-            $settings = get_settings();
-            $result = send_fonnte_message($report['kontak_pelapor'] ?? '', $message, $settings);
-            $fallbackUrl = $result['success'] ? '' : wa_me_url_php($report['kontak_pelapor'] ?? '', $message);
-            json_response([
-                'status'=>'success',
-                'message'=>$result['success'] ? 'Notifikasi WhatsApp berhasil dikirim.' : 'Notifikasi otomatis belum terkirim. Gunakan WhatsApp manual.',
-                'notification'=>$result,
-                'wa_fallback_url'=>$fallbackUrl,
-            ]);
-
-        case 'deleteReport':
-            require_session_role(['admin']);
-            $stmt = db()->prepare("DELETE FROM reports WHERE ticket_id=?");
-            $stmt->execute([clean($payload['ticketId'] ?? '')]);
-            json_response(['status'=>'success', 'message'=>'Aduan berhasil dihapus.']);
-
-        case 'updateSettings':
-            require_session_role(['admin']);
-            save_settings($payload['data'] ?? []);
-            json_response(['status'=>'success', 'message'=>'Pengaturan berhasil disimpan.']);
-
-        case 'saveCategory':
-            require_session_role(['admin']);
-            $d = $payload['data'] ?? [];
-            $kategori = clean($d['kategori'] ?? '');
-            $old = clean($d['oldKategori'] ?? '');
-            if ($kategori === '') json_response(['status'=>'error','message'=>'Nama kategori wajib diisi.'], 400);
-            if ($old !== '' && strtolower($old) !== strtolower($kategori)) {
-                $stmt = db()->prepare("UPDATE categories SET nama_kategori=? WHERE nama_kategori=?");
-                $stmt->execute([$kategori, $old]);
-            } else {
-                $stmt = db()->prepare("INSERT INTO categories (nama_kategori) VALUES (?) ON DUPLICATE KEY UPDATE nama_kategori=VALUES(nama_kategori)");
-                $stmt->execute([$kategori]);
-            }
-            json_response(['status'=>'success', 'message'=>'Kategori berhasil disimpan.']);
-
-        case 'deleteCategory':
-            require_session_role(['admin']);
-            $stmt = db()->prepare("DELETE FROM categories WHERE nama_kategori=?");
-            $stmt->execute([clean($payload['kategori'] ?? '')]);
-            json_response(['status'=>'success', 'message'=>'Kategori berhasil dihapus.']);
-
-        case 'saveUser':
-            require_session_role(['admin']);
-            $d = $payload['data'] ?? [];
-            $username = strtolower(clean($d['username'] ?? ''));
-            $password = clean($d['password'] ?? '');
-            $nama = clean($d['nama_petugas'] ?? '');
-            $nip = clean($d['nip'] ?? '');
-            $email = strtolower(clean($d['email'] ?? ''));
-            $role = clean($d['role'] ?? 'Petugas') === 'Admin' ? 'Admin' : 'Petugas';
-            if ($username === '') json_response(['status'=>'error','message'=>'Username wajib diisi.'], 400);
-
-            // Cek apakah akun sudah ada (untuk membedakan tambah vs edit)
-            $chk = db()->prepare("SELECT id FROM users WHERE LOWER(username)=? LIMIT 1");
-            $chk->execute([$username]);
-            $exists = $chk->fetch();
-            if (!$exists && $password === '') json_response(['status'=>'error','message'=>'Password wajib diisi untuk akun baru.'], 400);
-
-            if ($password !== '') {
-                // Password disimpan sebagai HASH bcrypt (satu arah, tidak bisa dilihat kembali)
-                $hash = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = db()->prepare("INSERT INTO users (username, password, nama_petugas, nip, email, role) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE password=VALUES(password), nama_petugas=VALUES(nama_petugas), nip=VALUES(nip), email=VALUES(email), role=VALUES(role)");
-                $stmt->execute([$username, $hash, $nama, $nip, $email, $role]);
-            } else {
-                // Edit tanpa mengganti password -> pertahankan password lama
-                $stmt = db()->prepare("UPDATE users SET nama_petugas=?, nip=?, email=?, role=? WHERE LOWER(username)=?");
-                $stmt->execute([$nama, $nip, $email, $role, $username]);
-            }
-            json_response(['status'=>'success', 'message'=>'Akun berhasil disimpan.']);
-
-        case 'deleteUser':
-            require_session_role(['admin']);
-            $username = strtolower(clean($payload['username'] ?? ''));
-            if ($username === 'admin') json_response(['status'=>'error','message'=>'Akun admin utama tidak boleh dihapus.'], 400);
-            $stmt = db()->prepare("DELETE FROM users WHERE LOWER(username)=?");
-            $stmt->execute([$username]);
-            json_response(['status'=>'success', 'message'=>'Akun berhasil dihapus.']);
-
-        case 'resetPassword':
-            // Lupa Password: verifikasi identitas via Username + NIP + Email lalu set password baru
-            $d = $payload['data'] ?? [];
-            $username = strtolower(clean($d['username'] ?? ''));
-            $nip = clean($d['nip'] ?? '');
-            $email = strtolower(clean($d['email'] ?? ''));
-            $newpass = clean($d['new_password'] ?? '');
-            if ($username === '' || $nip === '' || $email === '' || $newpass === '') json_response(['status'=>'error','message'=>'Username, NIP, email, dan password baru wajib diisi.'], 400);
-            if (mb_strlen($newpass) < 6) json_response(['status'=>'error','message'=>'Password baru minimal 6 karakter.'], 400);
-            $chk = db()->prepare("SELECT nip, email FROM users WHERE LOWER(username)=? LIMIT 1");
-            $chk->execute([$username]);
-            $acc = $chk->fetch();
-            if (!$acc) json_response(['status'=>'error','message'=>'Username tidak terdaftar.'], 404);
-            if (trim((string)($acc['nip'] ?? '')) === '' || trim((string)($acc['email'] ?? '')) === '') json_response(['status'=>'error','message'=>'Data NIP/email pada akun belum lengkap. Silakan hubungi Administrator.'], 403);
-            if (!hash_equals((string)$acc['nip'], (string)$nip) || !hash_equals(strtolower((string)$acc['email']), $email)) json_response(['status'=>'error','message'=>'NIP atau email tidak cocok dengan data akun. Hubungi Administrator bila perlu.'], 403);
-            $hash = password_hash($newpass, PASSWORD_DEFAULT);
-            $stmt = db()->prepare("UPDATE users SET password=? WHERE LOWER(username)=?");
-            $stmt->execute([$hash, $username]);
-            json_response(['status'=>'success', 'message'=>'Password berhasil direset. Silakan login dengan password baru Anda.']);
-
-        default:
-            json_response(['status'=>'error', 'message'=>'Action POST tidak dikenali.'], 400);
-    }
-}
-
-try {
-    if (isset($_GET['action'])) api_get($_GET['action']);
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') api_post(get_json_body());
-} catch (Throwable $e) {
-    json_response(['status'=>'error', 'message'=>'Server error: ' . $e->getMessage()], 500);
-}
-?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -773,6 +259,12 @@ try {
         grid-template-columns: 1fr;
       }
     }
+    .auth-field label { display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; }
+    .auth-field input, .auth-field select { width:100%; min-height:44px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; font-size:14px; background:#fff; outline:none; }
+    .auth-field input:focus, .auth-field select:focus { border-color:#991b1b; box-shadow:0 0 0 3px rgba(153,27,27,.10); }
+    .required-mark { color:#dc2626; }
+    .auth-gate { background:linear-gradient(135deg,#fff 0%,#fff7f7 100%); border:1px solid #fecaca; }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
   </style>
 </head>
 <body class="text-slate-800">
@@ -822,6 +314,14 @@ try {
               <span id="modal-kategori" class="font-bold text-slate-700">-</span>
             </div>
             <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Tanggal Kejadian</span>
+              <span id="modal-tanggal-kejadian" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Lokasi Kejadian</span>
+              <span id="modal-lokasi-kejadian" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
               <span class="block text-[11px] text-slate-400 font-semibold uppercase">Bukti Pendukung</span>
               <span id="modal-bukti" class="font-bold text-slate-700">-</span>
             </div>
@@ -839,7 +339,6 @@ try {
                 <select id="modal-status" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
                   <option>Pending</option>
                   <option>Diproses</option>
-                  <option>Perlu Informasi Tambahan</option>
                   <option>Selesai</option>
                   <option>Ditolak</option>
                 </select>
@@ -851,14 +350,8 @@ try {
             </div>
             <div class="flex justify-end gap-2">
               <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 font-bold text-xs text-slate-600 rounded-lg">Batal</button>
-              <button type="button" onclick="sendCurrentReporterNotification()" class="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-800 font-bold text-xs rounded-lg shadow flex items-center gap-1">
-                <i class="fa-brands fa-whatsapp"></i> Kirim WA
-              </button>
-              <button type="submit" value="save" class="px-4 py-2 bg-slate-700 hover:bg-slate-800 font-bold text-xs text-white rounded-lg shadow flex items-center gap-1">
-                <i class="fa-solid fa-floppy-disk"></i> Simpan
-              </button>
-              <button type="submit" value="save-send-wa" class="px-5 py-2 bg-red-900 hover:bg-red-800 font-bold text-xs text-white rounded-lg shadow flex items-center gap-1">
-                <i class="fa-brands fa-whatsapp"></i> Simpan & Kirim WA
+              <button class="px-5 py-2 bg-red-900 hover:bg-red-800 font-bold text-xs text-white rounded-lg shadow flex items-center gap-1">
+                <i class="fa-solid fa-floppy-disk"></i> Simpan Respon
               </button>
             </div>
           </form>
@@ -873,7 +366,7 @@ try {
         <div class="flex items-center justify-between h-20">
           <div class="flex items-center space-x-3">
             <div class="bg-white p-1 rounded-full shadow-2xl flex items-center justify-center w-12 h-12 ring-4 ring-white/15 overflow-hidden">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Logo KPU" class="w-full h-full object-contain p-0.5" />
+              <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Logo Instansi" data-app-logo class="w-full h-full object-contain p-0.5" />
             </div>
             <div>
               <h1 class="text-lg font-bold tracking-wide leading-tight">PENGADUAN ONLINE</h1>
@@ -883,6 +376,8 @@ try {
           <nav class="hidden md:flex space-x-2">
             <button onclick="window.location.hash='#lapor'" id="nav-lapor" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-white bg-red-850"><i class="fa-solid fa-pen-to-square"></i> Buat Laporan</button>
             <button onclick="window.location.hash='#lacak'" id="nav-lacak" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-magnifying-glass"></i> Lacak Aduan</button>
+            <button onclick="window.location.hash='#login'" id="nav-login" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-right-to-bracket"></i> Masuk</button>
+            <button onclick="window.location.hash='#daftar'" id="nav-daftar" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 bg-yellow-400 text-red-950 hover:bg-yellow-300"><i class="fa-solid fa-user-plus"></i> Daftar</button>
             <button onclick="window.location.hash='#dashboard'" id="nav-dashboard" class="hidden nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
             <button onclick="logout()" id="nav-logout" class="hidden px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 transition text-white flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
           </nav>
@@ -895,6 +390,8 @@ try {
       <div id="mobile-menu" class="hidden md:hidden bg-red-950 px-4 pt-2 pb-4 space-y-1 shadow-inner">
         <button onclick="window.location.hash='#lapor';toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
         <button onclick="window.location.hash='#lacak';toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
+        <button onclick="window.location.hash='#login';toggleMobileMenu()" id="nav-login-mobile" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk</button>
+        <button onclick="window.location.hash='#daftar';toggleMobileMenu()" id="nav-daftar-mobile" class="block w-full text-left px-3 py-2 rounded-md text-base font-bold bg-yellow-400 text-red-950 hover:bg-yellow-300"><i class="fa-solid fa-user-plus mr-2"></i>Daftar</button>
         <button onclick="window.location.hash='#dashboard';toggleMobileMenu()" id="nav-dashboard-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-chart-line mr-2"></i>Dashboard</button>
         <button onclick="logout();toggleMobileMenu()" id="nav-logout-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium bg-amber-600 text-white hover:bg-amber-700"><i class="fa-solid fa-right-from-bracket mr-2"></i>Logout</button>
       </div>
@@ -970,6 +467,8 @@ try {
           </div>
         </div>
 
+        <div id="public-service-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4"></div>
+        
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div class="lg:col-span-1 space-y-6">
             <div class="bg-gradient-to-br from-red-900 via-red-800 to-red-950 text-white rounded-[28px] p-6 shadow-2xl relative overflow-hidden">
@@ -1016,7 +515,20 @@ try {
                 <p class="text-xs text-slate-500">Isi laporan dengan jujur dan lengkap. Anda dapat memilih opsi Anonim.</p>
               </div>
               
-              <form id="form-pengaduan" onsubmit="handleLapor(event)" class="p-6 space-y-6">
+              <div id="complaint-auth-gate" class="auth-gate m-6 rounded-2xl p-6 text-center">
+                <div class="w-14 h-14 mx-auto rounded-2xl bg-red-100 text-red-900 flex items-center justify-center text-2xl"><i class="fa-solid fa-lock"></i></div>
+                <h3 class="mt-4 text-lg font-extrabold text-slate-900">Masuk untuk mengisi pengaduan</h3>
+                <p class="mt-3 text-sm sm:text-base text-slate-600 max-w-2xl mx-auto leading-relaxed text-center">
+                  <span class="block">Anda harus memiliki akun masyarakat untuk mengisi formulir pengaduan.</span>
+                  <span class="block mt-1">Belum punya akun? Silakan daftar terlebih dahulu, lalu masuk.</span>
+                </p>
+                <div class="mt-5 flex flex-col sm:flex-row justify-center gap-3">
+                  <button type="button" onclick="window.location.hash='#login'" class="min-h-[44px] px-6 py-3 bg-red-900 hover:bg-red-800 text-white font-bold text-sm rounded-xl"><i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk</button>
+                  <button type="button" onclick="window.location.hash='#daftar'" class="min-h-[44px] px-6 py-3 bg-white hover:bg-red-50 text-red-900 font-bold text-sm rounded-xl border border-red-200"><i class="fa-solid fa-user-plus mr-2"></i>Daftar Akun</button>
+                </div>
+              </div>
+              <div id="citizen-welcome" class="hidden mx-6 mt-6 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-900"></div>
+              <form id="form-pengaduan" onsubmit="handleLapor(event)" class="hidden p-6 space-y-6">
                 <div class="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
                   <div class="flex items-center justify-between gap-3 flex-wrap">
                     <label class="text-sm font-bold text-slate-700">Jenis Identitas Pelapor</label>
@@ -1035,7 +547,7 @@ try {
                       <input id="nama_pelapor" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Nama Anda">
                     </div>
                     <div>
-                      <label class="block text-xs font-semibold text-slate-600 mb-1">Nomor WhatsApp / Kontak</label>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1">No. WA Aktif Pelapor</label>
                       <input id="kontak_pelapor" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Contoh: 08123456789">
                     </div>
                   </div>
@@ -1052,9 +564,20 @@ try {
                   </div>
                 </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Tanggal Kejadian <span class="text-red-500">*</span></label>
+                    <input type="date" id="tanggal_kejadian" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800 bg-white">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Lokasi Kejadian <span class="text-red-500">*</span></label>
+                    <input id="lokasi_kejadian" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Contoh: Desa Rantau Indah, Kecamatan Geragai">
+                  </div>
+                </div>
+
                 <div>
                   <label class="block text-xs font-bold text-slate-700 mb-1">Deskripsi Lengkap Kejadian <span class="text-red-500">*</span></label>
-                  <textarea id="deskripsi" required rows="5" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Tuliskan kronologi lengkap, lokasi, tanggal, dan detail kejadian lainnya..."></textarea>
+                  <textarea id="deskripsi" required rows="5" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Tuliskan kronologi dan detail kejadian lainnya..."></textarea>
                 </div>
 
                 <div>
@@ -1064,7 +587,7 @@ try {
                 </div>
 
                 <div class="pt-4 border-t border-slate-100 flex justify-end">
-                  <button id="btn-submit-lapor" class="px-6 py-3 bg-red-900 hover:bg-red-800 text-white font-semibold text-sm rounded-xl shadow-md flex items-center gap-2">
+                  <button id="btn-submit-lapor" class="px-6 py-3 bg-red-900 hover:bg-red-800 text-white font-semibold text-sm rounded-xl shadow-md flex items-center justify-center gap-2 shrink-0">
                     <i class="fa-solid fa-paper-plane"></i> Kirim Laporan Pengaduan
                   </button>
                 </div>
@@ -1098,71 +621,47 @@ try {
       <section id="tab-login" class="content-tab hidden">
         <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in">
           <div class="bg-gradient-to-r from-red-900 to-red-950 text-white px-6 py-8 text-center space-y-2">
-            <div class="inline-flex p-3 bg-white/10 rounded-full text-2xl">
-              <i class="fa-solid fa-shield-halved text-yellow-400"></i>
-            </div>
-            <h2 class="text-lg font-bold">Portal Login Petugas</h2>
-            <p class="text-xs text-red-200">Halaman masuk petugas terenkripsi dan dibatasi.</p>
+            <div class="inline-flex p-3 bg-white/10 rounded-full text-2xl"><i class="fa-solid fa-right-to-bracket text-yellow-400"></i></div>
+            <h2 class="text-xl font-extrabold">Masuk ke Akun</h2>
+            <p class="text-sm text-red-100">Masuk dahulu untuk mengisi formulir pengaduan.</p>
           </div>
           <form id="form-login" onsubmit="handleLogin(event)" class="p-6 space-y-4">
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
-              <input id="username" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Username">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
-              <input id="password" type="password" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Password">
-            </div>
-            <button id="btn-submit-login" class="w-full py-3 bg-red-900 hover:bg-red-800 text-white font-semibold text-sm rounded-xl shadow-md">
-              <i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk Sekarang
-            </button>
-            <div class="text-center pt-1">
-              <button type="button" onclick="toggleForgotPassword(true)" class="text-xs font-semibold text-red-800 hover:text-red-900 hover:underline">
-                <i class="fa-solid fa-circle-question mr-1"></i>Lupa Password?
-              </button>
-            </div>
+            <div class="auth-field"><label for="username">Username atau Email <span class="required-mark">*</span></label><input id="username" autocomplete="username" required placeholder="Masukkan username atau email"></div>
+            <div class="auth-field"><label for="password">Password <span class="required-mark">*</span></label><div class="relative"><input id="password" type="password" autocomplete="current-password" required placeholder="Masukkan password"><button type="button" onclick="togglePassword('password',this)" aria-label="Tampilkan password" class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 text-slate-500"><i class="fa-solid fa-eye"></i></button></div></div>
+            <button id="btn-submit-login" class="w-full min-h-[44px] py-3 bg-red-900 hover:bg-red-800 text-white font-bold text-sm rounded-xl shadow-md"><i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk</button>
+            <p class="text-center text-sm text-slate-600">Belum memiliki akun? <button type="button" onclick="window.location.hash='#daftar'" class="font-extrabold text-red-800 hover:underline">Daftar sekarang</button></p>
           </form>
+        </div>
+      </section>
 
-          <!-- Panel Lupa Password -->
-          <div id="forgot-panel" class="hidden border-t border-slate-100 p-6 space-y-4 bg-slate-50/60">
-            <div class="flex items-start gap-2">
-              <i class="fa-solid fa-key text-red-800 mt-0.5"></i>
-              <div>
-                <h3 class="text-sm font-bold text-slate-800">Pemulihan Password</h3>
-                <p class="text-xs text-slate-500">Verifikasi identitas dengan <b>NIP</b> dan <b>Email</b> yang terdaftar pada akun Anda untuk mengatur ulang password.</p>
-              </div>
-            </div>
-            <form id="form-forgot" onsubmit="handleResetPassword(event)" class="space-y-3">
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
-                <input id="fp-username" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Username akun Anda">
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">NIP</label>
-                <input id="fp-nip" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="NIP terdaftar">
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Email</label>
-                <input id="fp-email" type="email" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Email terdaftar">
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-700 mb-1">Password Baru</label>
-                <input id="fp-newpass" type="password" required minlength="6" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Minimal 6 karakter">
-              </div>
-              <div class="flex gap-2 pt-1">
-                <button type="button" onclick="toggleForgotPassword(false)" class="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs rounded-xl">
-                  <i class="fa-solid fa-arrow-left mr-1"></i>Kembali
-                </button>
-                <button id="btn-reset-pass" class="flex-1 py-2.5 bg-red-900 hover:bg-red-800 text-white font-semibold text-xs rounded-xl shadow-md">
-                  <i class="fa-solid fa-rotate mr-1"></i>Reset Password
-                </button>
-              </div>
-            </form>
-            <div class="border-t border-slate-200 pt-3 text-center">
-              <p class="text-[11px] text-slate-500">Data NIP/email tidak cocok? Hubungi Administrator:</p>
-              <p id="fp-contact" class="text-xs font-semibold text-red-800 mt-1"></p>
-            </div>
+      <!-- TAB 4: DAFTAR MASYARAKAT -->
+      <section id="tab-daftar" class="content-tab hidden">
+        <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+          <div class="px-6 sm:px-8 py-7 border-b border-slate-100">
+            <div class="flex items-start gap-4"><div class="w-12 h-12 rounded-xl bg-red-100 text-red-900 flex items-center justify-center text-xl shrink-0"><i class="fa-solid fa-user-plus"></i></div><div><h2 class="text-2xl font-extrabold text-slate-900">Daftar Akun</h2><p class="mt-1 text-sm text-slate-600">Lengkapi data diri berikut. Setelah pendaftaran berhasil, silakan masuk untuk membuat pengaduan.</p></div></div>
           </div>
+          <div class="mx-6 sm:mx-8 mt-6 rounded-xl bg-blue-700 text-white p-4 text-sm leading-relaxed"><p class="font-extrabold"><i class="fa-solid fa-circle-info mr-2"></i>Mengapa kami meminta data ini?</p><p class="mt-1 text-blue-50">Data pribadi digunakan untuk memverifikasi akun dan menindaklanjuti pengaduan. Pastikan data yang dimasukkan benar.</p></div>
+          <form id="form-daftar" onsubmit="handleRegister(event)" class="p-6 sm:p-8 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div class="auth-field"><label for="reg-nik">NIK <span class="required-mark">*</span></label><input id="reg-nik" inputmode="numeric" maxlength="16" pattern="[0-9]{16}" required placeholder="16 digit NIK"></div>
+              <div class="auth-field"><label for="reg-nama">Nama Lengkap <span class="required-mark">*</span></label><input id="reg-nama" required placeholder="Nama sesuai identitas"></div>
+              <div class="auth-field"><label for="reg-tempat">Tempat Tinggal Saat Ini <span class="required-mark">*</span></label><input id="reg-tempat" required placeholder="Kabupaten/Kota tempat tinggal"></div>
+              <div class="auth-field"><label for="reg-lahir">Tanggal Lahir <span class="required-mark">*</span></label><input id="reg-lahir" type="date" required></div>
+              <div class="auth-field"><label for="reg-kelamin">Jenis Kelamin <span class="required-mark">*</span></label><select id="reg-kelamin" required><option value="">Pilih jenis kelamin</option><option>Laki-laki</option><option>Perempuan</option></select></div>
+              <div class="auth-field"><label for="reg-telepon">No. WA Aktif <span class="required-mark">*</span></label><input id="reg-telepon" type="tel" inputmode="tel" required placeholder="Contoh: 081234567890"></div>
+              <div class="auth-field"><label for="reg-pekerjaan">Pekerjaan <span class="required-mark">*</span></label><select id="reg-pekerjaan" required><option value="">Pilih pekerjaan</option><option>PNS / ASN</option><option>TNI / Polri</option><option>Pegawai Swasta</option><option>Wiraswasta</option><option>Petani / Nelayan</option><option>Pelajar / Mahasiswa</option><option>Ibu Rumah Tangga</option><option>Tidak / Belum Bekerja</option><option>Lainnya</option></select></div>
+              <div class="auth-field"><label for="reg-disabilitas">Penyandang Disabilitas? <span class="required-mark">*</span></label><select id="reg-disabilitas" required><option value="">Pilih jawaban</option><option value="Tidak">Tidak</option><option value="Ya">Ya</option></select></div>
+              <div class="auth-field"><label for="reg-username">Username <span class="required-mark">*</span></label><input id="reg-username" minlength="4" pattern="[A-Za-z0-9._-]{4,}" autocomplete="username" required placeholder="Minimal 4 karakter"></div>
+              <div class="auth-field"><label for="reg-email">Email <span class="required-mark">*</span></label><input id="reg-email" type="email" autocomplete="email" required placeholder="nama@email.com"></div>
+              <div class="auth-field"><label for="reg-password">Password <span class="required-mark">*</span></label><div class="relative"><input id="reg-password" type="password" minlength="8" autocomplete="new-password" required placeholder="Minimal 8 karakter"><button type="button" onclick="togglePassword('reg-password',this)" aria-label="Tampilkan password" class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 text-slate-500"><i class="fa-solid fa-eye"></i></button></div><p class="mt-1 text-[11px] text-slate-500">Gunakan huruf besar, huruf kecil, angka, dan karakter khusus.</p></div>
+              <div class="auth-field"><label for="reg-password-confirm">Konfirmasi Password <span class="required-mark">*</span></label><div class="relative"><input id="reg-password-confirm" type="password" minlength="8" autocomplete="new-password" required placeholder="Ulangi password"><button type="button" onclick="togglePassword('reg-password-confirm',this)" aria-label="Tampilkan password" class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 text-slate-500"><i class="fa-solid fa-eye"></i></button></div></div>
+            </div>
+            <label class="flex items-start gap-3 text-sm text-slate-700"><input id="reg-add-party" type="checkbox" onchange="toggleConfirmableParty()" class="mt-1 w-4 h-4 accent-red-800"><span>Apakah Anda ingin menambahkan pihak yang dapat dikonfirmasi?</span></label>
+            <div id="confirmable-party" class="hidden rounded-xl bg-slate-50 border border-slate-200 p-5"><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="auth-field"><label for="reg-party-name">Nama Pihak <span class="required-mark">*</span></label><input id="reg-party-name" placeholder="Nama lengkap"></div><div class="auth-field"><label for="reg-party-email">Email Pihak <span class="required-mark">*</span></label><input id="reg-party-email" type="email" placeholder="lapor@contoh.com"></div><div class="auth-field"><label for="reg-party-phone">No. Telp Aktif Pihak <span class="required-mark">*</span></label><input id="reg-party-phone" type="tel" inputmode="tel" placeholder="Minimal 8 angka"></div></div></div>
+            <label class="flex items-start gap-3 text-sm text-slate-700"><input id="reg-consent" type="checkbox" required class="mt-1 w-4 h-4 accent-red-800"><span>Saya telah membaca dan menyetujui Syarat dan Ketentuan Layanan. <span class="required-mark">*</span></span></label>
+            <button id="btn-submit-register" class="w-full min-h-[46px] py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-sm rounded-xl shadow-md"><i class="fa-solid fa-user-check mr-2"></i>Daftar</button>
+            <p class="text-center text-sm text-slate-600">Sudah memiliki akun? <button type="button" onclick="window.location.hash='#login'" class="font-extrabold text-red-800 hover:underline">Masuk</button></p>
+          </form>
         </div>
       </section>
 
@@ -1173,7 +672,7 @@ try {
           <aside id="admin-menu" class="hidden admin-sidebar p-5">
             <div class="relative z-10 flex items-center gap-3 pb-5 mb-4 border-b border-white/15">
               <div class="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg p-1.5 overflow-hidden">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Logo KPU" class="w-full h-full object-contain" />
+                <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Logo Instansi" data-app-logo class="w-full h-full object-contain" />
               </div>
               <div>
                 <h3 class="text-sm font-extrabold leading-tight">PENGADUAN</h3>
@@ -1191,6 +690,7 @@ try {
               <button onclick="switchAdminView('kategori')" id="admin-menu-kategori" class="admin-side-btn admin-only"><i class="fa-solid fa-tags w-5 text-center"></i> Kategori Aduan</button>
               <button onclick="switchAdminView('publik')" id="admin-menu-publik" class="admin-side-btn admin-only"><i class="fa-solid fa-layer-group w-5 text-center"></i> Tampilan Publik</button>
               <button onclick="switchAdminView('akun')" id="admin-menu-akun" class="admin-side-btn admin-only"><i class="fa-solid fa-users-gear w-5 text-center"></i> Akun Pengguna</button>
+              <button onclick="switchAdminView('pelapor')" id="admin-menu-pelapor" class="admin-side-btn admin-only"><i class="fa-solid fa-address-card w-5 text-center"></i> Data Pelapor</button>
               <button onclick="logout()" class="admin-side-btn"><i class="fa-solid fa-right-from-bracket w-5 text-center"></i> Logout</button>
             </nav>
           </aside>
@@ -1227,7 +727,6 @@ try {
                       <option value="semua">Semua Status</option>
                       <option>Pending</option>
                       <option>Diproses</option>
-                      <option>Perlu Informasi Tambahan</option>
                       <option>Selesai</option>
                       <option>Ditolak</option>
                     </select>
@@ -1239,6 +738,7 @@ try {
                       <tr class="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
                         <th class="py-3 px-6">ID Tiket / Tgl</th>
                         <th class="py-3 px-6">Pelapor</th>
+                        <th class="py-3 px-6">No. WA Aktif Pelapor</th>
                         <th class="py-3 px-6">Kategori & Subjek</th>
                         <th class="py-3 px-6">Status</th>
                         <th class="py-3 px-6 text-center">Aksi</th>
@@ -1261,6 +761,19 @@ try {
                 <p class="text-xs text-slate-500">Sesuaikan data kontak yang dapat dihubungi oleh masyarakat.</p>
               </div>
               <form onsubmit="saveContactSettings(event)" class="p-6 space-y-4">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <label class="text-xs font-bold text-slate-700 block mb-3">Logo Aplikasi</label>
+                  <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div class="w-24 h-24 rounded-2xl bg-white border border-slate-200 p-2 flex items-center justify-center shrink-0">
+                      <img id="setting-logo-preview" data-app-logo src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Pratinjau logo" class="w-full h-full object-contain">
+                    </div>
+                    <div class="flex-1">
+                      <input id="setting-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="handleLogoUpload(event)" class="block w-full text-sm text-slate-600 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-red-100 file:text-red-900 hover:file:bg-red-200 cursor-pointer">
+                      <p class="mt-2 text-[11px] text-slate-500">Format PNG, JPG, WEBP, atau SVG. Gambar otomatis diperkecil agar ringan.</p>
+                      <button id="btn-remove-logo" type="button" onclick="removeUploadedLogo()" class="hidden mt-3 px-3 py-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs font-bold"><i class="fa-solid fa-trash mr-1"></i>Hapus Logo Upload</button>
+                    </div>
+                  </div>
+                </div>
                 <div>
                   <label class="text-xs font-bold text-slate-600 block mb-1">Alamat Kantor KPU</label>
                   <textarea id="setting-address" required rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800"></textarea>
@@ -1271,11 +784,11 @@ try {
                 </div>
 
                 <div class="border-t border-slate-100 pt-4 mt-2">
-                  <h4 class="text-sm font-bold text-slate-800 mb-2"><i class="fa-brands fa-whatsapp text-green-600 mr-1"></i>Gateway Notifikasi WhatsApp (Fonnte)</h4>
-                  <p class="text-xs text-slate-500 mb-4">Kirim pemberitahuan otomatis kepada petugas serta tanda terima dan pembaruan status kepada pelapor.</p>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <h4 class="text-sm font-bold text-slate-800 mb-2"><i class="fa-brands fa-whatsapp text-green-600 mr-1"></i>Notifikasi Instan WhatsApp (Fonnte)</h4>
+                  <p class="text-xs text-slate-500 mb-4">Secara otomatis mengirim notifikasi ke grup/nomor admin ketika ada laporan baru masuk.</p>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label class="text-xs font-bold text-slate-600 block mb-1">Status Gateway</label>
+                      <label class="text-xs font-bold text-slate-600 block mb-1">Status Pengiriman</label>
                       <select id="setting-wa-enabled" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
                         <option value="false">Tidak Aktif</option>
                         <option value="true">Aktif</option>
@@ -1283,40 +796,15 @@ try {
                     </div>
                     <div>
                       <label class="text-xs font-bold text-slate-600 block mb-1">Token Fonnte API</label>
-                      <input id="setting-wa-token" type="password" autocomplete="new-password" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Token API Fonnte">
+                      <input id="setting-wa-token" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Token API Fonnte">
                     </div>
                     <div>
-                      <label class="text-xs font-bold text-slate-600 block mb-1">Nomor / ID Grup Petugas</label>
-                      <input id="setting-wa-target" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="628xxxx atau 123456789@g.us">
+                      <label class="text-xs font-bold text-slate-600 block mb-1">Nomor/ID Group Tujuan</label>
+                      <input id="setting-wa-target" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Gunakan format 628xxxx">
                     </div>
-                    <div>
-                      <label class="text-xs font-bold text-slate-600 block mb-1">Pengaduan Baru ke Petugas</label>
-                      <select id="setting-wa-auto-staff" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
-                        <option value="true">Aktif</option>
-                        <option value="false">Tidak Aktif</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label class="text-xs font-bold text-slate-600 block mb-1">Tanda Terima ke Pelapor</label>
-                      <select id="setting-wa-auto-reporter" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
-                        <option value="true">Aktif</option>
-                        <option value="false">Tidak Aktif</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label class="text-xs font-bold text-slate-600 block mb-1">Status Selesai/Ditolak ke Petugas</label>
-                      <select id="setting-wa-auto-staff-status" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
-                        <option value="false">Tidak Aktif</option>
-                        <option value="true">Aktif</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                    <i class="fa-solid fa-shield-halved mr-1"></i>
-                    Token API tidak boleh dimasukkan ke repository GitHub publik.
                   </div>
                 </div>
-
+                
                 <div class="flex justify-end pt-4 border-t border-slate-100">
                   <button id="btn-save-kontak" class="px-5 py-2.5 bg-red-900 hover:bg-red-800 text-white rounded-xl text-xs font-bold flex items-center gap-2">
                     <i class="fa-solid fa-floppy-disk"></i> Simpan Kontak & WA
@@ -1344,7 +832,7 @@ try {
             <div id="admin-view-publik" class="admin-view hidden premium-card overflow-hidden">
               <div class="bg-slate-50 border-b border-slate-100 px-6 py-4">
                 <h3 class="font-bold text-slate-800"><i class="fa-solid fa-layer-group text-red-900 mr-2"></i>Pengaturan Halaman Utama</h3>
-                <p class="text-xs text-slate-500">Sesuaikan judul dan deskripsi layanan pada beranda publik.</p>
+                <p class="text-xs text-slate-500">Sesuaikan informasi layanan dan card promosi pada beranda publik.</p>
               </div>
               <form onsubmit="savePublicSettings(event)" class="p-6 space-y-5">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1356,6 +844,15 @@ try {
                     <label class="text-xs font-bold text-slate-600 block mb-1">Deskripsi Layanan Beranda</label>
                     <input id="public-setting-desc" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Deskripsi Banner">
                   </div>
+                </div>
+                <div class="border-t border-slate-100 pt-5">
+                  <div class="flex items-center justify-between gap-3 mb-3">
+                    <h4 class="font-bold text-slate-800 text-sm">Cards Fitur Pelayanan Beranda</h4>
+                    <button type="button" onclick="addPublicCardRow()" class="px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded-xl text-xs font-bold">
+                      <i class="fa-solid fa-plus mr-1"></i>Tambah Fitur
+                    </button>
+                  </div>
+                  <div id="public-card-editor" class="space-y-3"></div>
                 </div>
                 <div class="flex justify-end border-t border-slate-100 pt-5">
                   <button class="px-5 py-2.5 bg-red-900 hover:bg-red-800 text-white rounded-xl text-xs font-bold flex items-center gap-1">
@@ -1371,17 +868,15 @@ try {
                 <h3 class="font-bold text-slate-800"><i class="fa-solid fa-users-gear text-red-900 mr-2"></i>Manajemen Akun Petugas</h3>
                 <p class="text-xs text-slate-500">Hanya Administrator yang berwenang menambahkan atau mengubah akun petugas.</p>
               </div>
-              <form onsubmit="saveUser(event)" class="p-6 grid grid-cols-1 md:grid-cols-3 gap-3 border-b border-slate-100">
+              <form onsubmit="saveUser(event)" class="p-6 grid grid-cols-1 md:grid-cols-4 gap-3 border-b border-slate-100">
                 <input id="user-username" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Username" required>
-                <input id="user-nip" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="NIP" required>
-                <input id="user-email" type="email" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Alamat Email" required>
+                <input id="user-password" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Password" required>
                 <input id="user-name" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Nama Lengkap" required>
-                <input id="user-password" type="password" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Password (kosongkan bila tidak diubah)">
                 <select id="user-role" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800 bg-white">
                   <option>Admin</option>
                   <option>Petugas</option>
                 </select>
-                <button id="btn-save-user" class="md:col-span-3 px-4 py-2 bg-red-900 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                <button id="btn-save-user" class="md:col-span-4 px-4 py-2 bg-red-900 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
                   <i class="fa-solid fa-user-plus"></i> Tambah / Simpan Akun
                 </button>
               </form>
@@ -1390,15 +885,47 @@ try {
                   <thead>
                     <tr class="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
                       <th class="py-3 px-6">Username</th>
-                      <th class="py-3 px-6">NIP</th>
                       <th class="py-3 px-6">Nama</th>
-                      <th class="py-3 px-6">Email</th>
                       <th class="py-3 px-6">Hak Akses</th>
                       <th class="py-3 px-6 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody id="user-table" class="divide-y divide-slate-100 text-sm"></tbody>
                 </table>
+              </div>
+            </div>
+
+            <!-- View 6: Data Pelapor Terdaftar -->
+            <div id="admin-view-pelapor" class="admin-view hidden premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 class="font-bold text-slate-800"><i class="fa-solid fa-address-card text-red-900 mr-2"></i>Data Pelapor Terdaftar</h3>
+                  <p class="text-xs text-slate-500">Daftar masyarakat yang sudah membuat akun. Password tidak ditampilkan.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="citizen-count" class="px-3 py-1.5 rounded-lg bg-red-100 text-red-900 text-xs font-extrabold">0 akun</span>
+                  <button type="button" onclick="renderCitizenTable()" class="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>Muat Ulang</button>
+                </div>
+              </div>
+              <div class="p-4 border-b border-slate-100">
+                <input id="search-citizen" oninput="renderCitizenTable()" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Cari nama, NIK, username, email, telepon, atau tempat tinggal">
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[1250px] text-left border-collapse">
+                  <thead>
+                    <tr class="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                      <th class="py-3 px-4">Identitas</th>
+                      <th class="py-3 px-4">Akun & Kontak</th>
+                      <th class="py-3 px-4">Domisili & Lahir</th>
+                      <th class="py-3 px-4">Profil</th>
+                      <th class="py-3 px-4">Pihak Konfirmasi</th>
+                      <th class="py-3 px-4">Tanggal Daftar</th>
+                      <th class="py-3 px-4 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="citizen-table" class="divide-y divide-slate-100 text-sm"></tbody>
+                </table>
+                <div id="no-citizen" class="hidden p-10 text-center text-slate-400"><i class="fa-solid fa-users-slash text-4xl mb-3 block"></i>Belum ada akun pelapor yang terdaftar.</div>
               </div>
             </div>
           </div>
@@ -1417,8 +944,12 @@ try {
 
   <script>
     /* KONFIGURASI APPS SCRIPT */
-    const IS_PREVIEW = false;
-    const API_URL = window.location.pathname;
+    const IS_PREVIEW = false; 
+    // Ganti dengan URL deployment Web App dari backend Code.gs.
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbzcRIN_st6STPgZfAvRtlhVmvqGSLzkVSCLaSzNsazD2dajRszx3zyKd-MrolgdoYzS/exec';
+    const DEFAULT_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg';
+    const LOGO_STORAGE_KEY = 'kpu_uploaded_logo';
+    let pendingLogoData = localStorage.getItem(LOGO_STORAGE_KEY) || '';
 
     let currentUser = null;
     let currentReports = [];
@@ -1427,6 +958,8 @@ try {
     let currentSettings = {};
     let pelaporType = 'anonim';
     let editingCategoryName = '';
+    let citizenAccounts = [];
+
 
     const dummyReports = [
       {ticket_id:'KPU-TJT-2026-0001',tanggal_masuk:'2026-05-10T09:12:00.000Z',kategori:'Logistik Pemilu',subjek:'Kerusakan Surat Suara di PPS Rantau Indah',deskripsi:'Ditemukan 2 box surat suara dalam keadaan basah karena atap sekretariat PPS bocor saat hujan deras malam hari.',nama_pelapor:'Muhammad Yusuf',kontak_pelapor:'081274561234',bukti_link:'https://drive.google.com',status:'Selesai',tanggapan_admin:'Tim KPU Kabupaten Tanjung Jabung Timur telah mengirimkan box pengganti dan mengamankan surat suara yang tersisa ke lokasi kering.',tanggal_update:'2026-05-11T14:30:00.000Z'},
@@ -1434,8 +967,8 @@ try {
       {ticket_id:'KPU-TJT-2026-0003',tanggal_masuk:'2026-05-17T15:20:00.000Z',kategori:'Administrasi',subjek:'Keterlambatan Pemasangan DPS',deskripsi:'Papan pengumuman DPS di kantor Desa Lambur Luar belum terpasang sampai batas waktu.',nama_pelapor:'Hendra Wijaya',kontak_pelapor:'082390887112',bukti_link:'https://drive.google.com',status:'Pending',tanggapan_admin:'',tanggal_update:''}
     ];
     const dummyUsers = [
-      {username:'admin',password:'admin2026',nama_petugas:'Administrator KPU Tanjung Jabung Timur',nip:'198501012010011001',email:'admin@kpu-tanjabtim.go.id',role:'Admin'},
-      {username:'peserta',password:'admin2026',nama_petugas:'Staf Pelaksana KPU',nip:'199002022015022002',email:'peserta@kpu-tanjabtim.go.id',role:'Petugas'}
+      {username:'admin',password:'admin2026',nama_petugas:'Administrator KPU Tanjung Jabung Timur',role:'Admin'},
+      {username:'peserta',password:'admin2026',nama_petugas:'Staf Pelaksana KPU',role:'Petugas'}
     ];
     const dummyCategories = [
       'Logistik Pemilu',
@@ -1458,9 +991,6 @@ try {
       wa_enabled:'false',
       wa_token:'',
       wa_target:'',
-      wa_auto_staff:'true',
-      wa_auto_reporter:'true',
-      wa_auto_staff_status:'false',
       public_service_title:'Layanan Pengaduan Masyarakat',
       public_service_desc:'Sampaikan aduan, kendala, atau masukan terkait pelayanan, administrasi, logistik, dan penyelenggaraan Pemilu di wilayah Kabupaten Tanjung Jabung Timur.',
       public_cards_json:''
@@ -1470,55 +1000,62 @@ try {
 
     async function bootApp() {
       document.getElementById('preview-banner').style.display = IS_PREVIEW ? 'flex' : 'none';
+      applyUploadedLogo(pendingLogoData || DEFAULT_LOGO_URL);
+      citizenAccounts = JSON.parse(localStorage.getItem('kpu_citizen_accounts') || '[]');
       setPelaporType('anonim');
       await refreshPublicData();
       
-      apiGet('getPublicStats').then(res => {
+      apiGet('getAllReports').then(res => {
         if(res.status === 'success'){
+          const arr = res.data || [];
           const t = document.getElementById('public-stat-total');
           const d = document.getElementById('public-stat-selesai');
-          if(t) t.innerText = Number(res.data?.total || 0);
-          if(d) d.innerText = Number(res.data?.selesai || 0);
+          if(t) t.innerText = arr.length; 
+          if(d) d.innerText = arr.filter(r => String(r.status || '').toLowerCase() === 'selesai').length;
         }
       }).catch(() => {});
 
-      try {
-        const sessionRes = await apiGet('getSession');
-        currentUser = sessionRes.status === 'success' ? sessionRes.data : null;
-      } catch(e) {
-        currentUser = null;
+      const session = localStorage.getItem('kpu_current_user');
+      if (session) {
+        try {
+          currentUser = JSON.parse(session);
+        } catch (e) {
+          currentUser = null;
+        }
       }
-      if(currentUser) localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
-      else localStorage.removeItem('kpu_current_user');
       handleHashRouting();
       window.addEventListener('hashchange', handleHashRouting);
     }
 
     function handleHashRouting() {
-      const hash = window.location.hash;
+      const hash = window.location.hash || '#lapor';
+      const isCitizen = currentUser && String(currentUser.role||'').toLowerCase() === 'masyarakat';
+      const isStaff = currentUser && !isCitizen;
       if (hash === '#login') {
-        if (currentUser) enterDashboard(currentUser);
-        else switchTab('login');
+        if (isCitizen) enterCitizen(currentUser); else if (isStaff) enterDashboard(currentUser); else switchTab('login');
+      } else if (hash === '#daftar') {
+        if (isCitizen) enterCitizen(currentUser); else switchTab('daftar');
       } else if (hash === '#lacak') {
         switchTab('lacak');
-      } else if (hash === '#lapor' || hash === '') {
-        if (currentUser) enterDashboard(currentUser);
-        else switchTab('lapor');
-      } else if (hash === '#dashboard' && currentUser) {
+      } else if (hash === '#lapor') {
+        switchTab('lapor'); updateComplaintAccess();
+      } else if (hash === '#dashboard' && isStaff) {
         enterDashboard(currentUser);
+      } else {
+        window.location.hash = '#lapor';
       }
     }
 
     async function apiGet(action, params={}) {
       if(IS_PREVIEW) return previewGet(action, params);
       const q = new URLSearchParams({action, ...params}).toString();
-      const res = await fetch(`${API_URL}?${q}`, {credentials:'same-origin'});
+      const res = await fetch(`${GAS_URL}?${q}`);
       return await res.json();
     }
 
     async function apiPost(payload) {
       if(IS_PREVIEW) return previewPost(payload);
-      const res = await fetch(API_URL, {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const res = await fetch(GAS_URL, {method:'POST', body:JSON.stringify(payload)});
       return await res.json();
     }
 
@@ -1556,15 +1093,14 @@ try {
       
       const isAdmin = currentUser && String(currentUser.role || '').toLowerCase() === 'admin';
       if(currentUser && isAdmin) {
-        const [usersRes, adminSettingsRes] = await Promise.all([
-          apiGet('getUsers'),
-          apiGet('getAdminSettings')
-        ]);
+        const usersRes = await apiGet('getUsers');
         currentUsers = usersRes.status === 'success' ? usersRes.data : [];
-        if(adminSettingsRes.status === 'success') currentSettings = {...currentSettings, ...adminSettingsRes.data};
         renderUserTable();
         renderSettingsForm();
         renderCategoryList();
+        const citizensRes = await apiGet('getCitizens');
+        citizenAccounts = citizensRes.status === 'success' ? citizensRes.data : [];
+        renderCitizenTable();
       }
     }
 
@@ -1632,7 +1168,7 @@ try {
     }
 
     function statusBadge(status) {
-      const map = {Pending:'bg-amber-100 text-amber-800', Diterima:'bg-amber-100 text-amber-800', Diproses:'bg-blue-100 text-blue-800', 'Perlu Informasi Tambahan':'bg-purple-100 text-purple-800', Selesai:'bg-green-100 text-green-800', Ditolak:'bg-rose-100 text-rose-800'};
+      const map = {Pending:'bg-amber-100 text-amber-800', Diproses:'bg-blue-100 text-blue-800', Selesai:'bg-green-100 text-green-800', Ditolak:'bg-rose-100 text-rose-800'};
       return `<span class="px-2.5 py-1 rounded-full text-xs font-bold ${map[status] || 'bg-slate-100 text-slate-700'}">${escapeHtml(status||'-')}</span>`;
     }
 
@@ -1640,10 +1176,87 @@ try {
       return 'KPU-TJT-2026-' + String(Date.now()).slice(-4);
     }
 
+    function formatIncidentDate(value) {
+      if(!value) return '-';
+      const parts = String(value).split('-');
+      if(parts.length !== 3) return value;
+      const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return date.toLocaleDateString('id-ID', {day:'2-digit', month:'long', year:'numeric'});
+    }
+
+    function buildOfficeWhatsAppUrl(item) {
+      const officeNumber = normalizeWaNumber(currentSettings.contact_phone || '');
+      if(!officeNumber) return '';
+      const message = [
+        '*NOTIFIKASI PENGADUAN BARU*',
+        '',
+        'Nama Pelapor: ' + (item.nama_pelapor || '-'),
+        'Kategori Aduan: ' + (item.kategori || '-'),
+        'Tanggal Kejadian: ' + formatIncidentDate(item.tanggal_kejadian),
+        'Tempat Kejadian: ' + (item.lokasi_kejadian || '-'),
+        'Nomor Tiket: ' + (item.ticket_id || '-')
+      ].join('\n');
+      return `https://wa.me/${officeNumber}?text=${encodeURIComponent(message)}`;
+    }
+
+    function getReporterWhatsApp(report) {
+      const accounts = getCitizenAccounts();
+      const account = accounts.find(a =>
+        (report.pelapor_nik && String(a.nik) === String(report.pelapor_nik)) ||
+        (report.pelapor_username && String(a.username || '').toLowerCase() === String(report.pelapor_username).toLowerCase()) ||
+        (report.pelapor_email && String(a.email || '').toLowerCase() === String(report.pelapor_email).toLowerCase())
+      ) || accounts.find(a => String(a.nama || '').trim().toLowerCase() === String(report.nama_pelapor || '').trim().toLowerCase());
+      return String(account?.telepon || report.no_wa_pelapor || report.kontak_pelapor || '').trim();
+    }
+
+    function buildReporterReplyWhatsAppUrl(report) {
+      const number = normalizeWaNumber(getReporterWhatsApp(report));
+      if(!number) return '';
+      const message = [
+        'Terima kasih atas laporan Anda.',
+        `Nomor tiket: *#${report.ticket_id || '-'}*.`,
+        'Silakan pantau perkembangan aduan Anda pada tombol Lacak Aduan.'
+      ].join('\n');
+      return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+    }
+
+    function openReporterWhatsApp(ticketId) {
+      const report = currentReports.find(r => String(r.ticket_id) === String(ticketId));
+      if(!report) {
+        showToast('Data laporan tidak ditemukan.', 'error');
+        return;
+      }
+      const url = buildReporterReplyWhatsAppUrl(report);
+      if(!url) {
+        showToast('Nomor WhatsApp aktif pelapor tidak ditemukan pada daftar akun.', 'error');
+        return;
+      }
+      window.open(url, '_blank', 'noopener');
+    }
+
     function normalizeWaNumber(num) {
       let n = String(num||'').replace(/[^0-9]/g,''); 
       if(n.startsWith('0')) n = '62' + n.slice(1); 
       return n;
+    }
+
+    function defaultPublicCards() {
+      return [
+        {icon:'fa-envelope-open-text', title:'Tahapan Pemilu', desc:'Pengaduan terkait pelaksanaan teknis tahapan Pemilu.'},
+        {icon:'fa-user', title:'Data Pemilih', desc:'Aduan seputar pendaftaran pemilih dan daftar pemilih tetap (DPT).'},
+        {icon:'fa-bullhorn', title:'Kampanye Pemilu', desc:'Laporan kendala atau pengaduan seputar masa kampanye.'},
+        {icon:'fa-users', title:'Pelanggaran', desc:'Dugaan ketidaknetralan penyelenggara pemilu ad-hoc.'},
+        {icon:'fa-circle-question', title:'Layanan Umum', desc:'Permintaan informasi publik atau pengaduan umum lainnya.'}
+      ];
+    }
+
+    function getPublicCards() {
+      try {
+        const arr = JSON.parse(currentSettings.public_cards_json||'');
+        return Array.isArray(arr) && arr.length ? arr : defaultPublicCards();
+      } catch(e) {
+        return defaultPublicCards();
+      }
     }
 
     function renderPublicDisplay() {
@@ -1653,7 +1266,80 @@ try {
       if(t) t.innerText = title;
       const d = document.getElementById('public-service-desc'); 
       if(d) d.innerText = desc;
+      const wrap = document.getElementById('public-service-cards'); 
+      if(wrap) {
+        wrap.innerHTML = getPublicCards().map(c => `
+          <div class="service-card p-5">
+            <div class="icon-circle mb-4">
+              <i class="fa-solid ${escapeHtml(c.icon||'fa-circle-info')}"></i>
+            </div>
+            <h3 class="font-extrabold text-slate-900">${escapeHtml(c.title||'-')}</h3>
+            <p class="text-xs text-slate-500 mt-2 leading-relaxed">${escapeHtml(c.desc||'-')}</p>
+          </div>
+        `).join('');
+      }
+    }
 
+    function applyUploadedLogo(source) {
+      const logoSource = source || DEFAULT_LOGO_URL;
+      document.querySelectorAll('[data-app-logo]').forEach(img => { img.src = logoSource; });
+      const removeButton = document.getElementById('btn-remove-logo');
+      if(removeButton) removeButton.classList.toggle('hidden', !pendingLogoData);
+    }
+
+    function compressLogo(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('File logo tidak dapat dibaca.'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Format gambar logo tidak valid.'));
+          img.onload = () => {
+            const maxSize = 320;
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/webp', 0.88));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleLogoUpload(event) {
+      const file = event.target.files?.[0];
+      if(!file) return;
+      if(!file.type.startsWith('image/')) {
+        event.target.value = '';
+        showToast('Pilih file gambar yang valid.', 'error');
+        return;
+      }
+      if(file.size > 5 * 1024 * 1024) {
+        event.target.value = '';
+        showToast('Ukuran logo maksimal 5 MB.', 'error');
+        return;
+      }
+      try {
+        pendingLogoData = await compressLogo(file);
+        applyUploadedLogo(pendingLogoData);
+        showToast('Pratinjau logo siap. Klik Simpan Kontak & WA untuk menyimpan.', 'info');
+      } catch(error) {
+        event.target.value = '';
+        showToast(error.message || 'Logo gagal diproses.', 'error');
+      }
+    }
+
+    async function removeUploadedLogo() {
+      const res = await apiPost({action:'removeLogo'});
+      if(res.status !== 'success') return showToast(res.message || 'Gagal menghapus logo.', 'error');
+      pendingLogoData=''; currentSettings.logo_url=''; localStorage.removeItem(LOGO_STORAGE_KEY);
+      const input=document.getElementById('setting-logo-file'); if(input) input.value='';
+      applyUploadedLogo(DEFAULT_LOGO_URL); showToast('Logo upload dihapus.', 'info');
     }
 
     function renderContactInfo() {
@@ -1665,6 +1351,7 @@ try {
         const wa = normalizeWaNumber(p); 
         phoneEl.href = wa ? `https://wa.me/${wa}` : '#';
       }
+      applyUploadedLogo(currentSettings.logo_url || pendingLogoData || DEFAULT_LOGO_URL);
       renderPublicDisplay();
     }
 
@@ -1681,19 +1368,32 @@ try {
 
     async function handleLapor(e) {
       e.preventDefault();
+      if(!currentUser || String(currentUser.role||'').toLowerCase() !== 'masyarakat') {
+        showToast('Silakan masuk dengan akun masyarakat terlebih dahulu.', 'error');
+        window.location.hash = '#login';
+        return;
+      }
       const btn = document.getElementById('btn-submit-lapor');
-      const officeWaWindow = normalizeWaNumber(currentSettings.contact_phone || '') ? window.open('about:blank', 'sipena_office_whatsapp') : null;
+      const officeNumber = normalizeWaNumber(currentSettings.contact_phone || '');
+      const waWindow = officeNumber ? window.open('about:blank', 'kpu_pengaduan_whatsapp') : null;
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim Laporan...';
       try {
         const item = {
           ticket_id: generateTicketId(),
           tanggal_masuk: new Date().toISOString(),
+          tanggal_kejadian: document.getElementById('tanggal_kejadian').value,
+          lokasi_kejadian: document.getElementById('lokasi_kejadian').value.trim(),
           kategori: document.getElementById('kategori').value,
           subjek: document.getElementById('subjek').value.trim(),
           deskripsi: document.getElementById('deskripsi').value.trim(),
           nama_pelapor: pelaporType === 'anonim' ? 'Rahasia / Anonim' : (document.getElementById('nama_pelapor').value.trim()||'Rahasia / Anonim'),
-          kontak_pelapor: pelaporType === 'anonim' ? '-' : (document.getElementById('kontak_pelapor').value.trim()||'-'),
+          pelapor_nik: currentUser.nik || '',
+          pelapor_username: currentUser.username || '',
+          pelapor_email: currentUser.email || '',
+          kontak_pelapor: currentUser.telepon || document.getElementById('kontak_pelapor').value.trim() || '-',
+          no_wa_pelapor: currentUser.telepon || document.getElementById('kontak_pelapor').value.trim() || '-',
+
           bukti_link: document.getElementById('bukti_link').value.trim(),
           status: 'Pending',
           tanggapan_admin: '',
@@ -1701,34 +1401,36 @@ try {
         };
         const res = await apiPost({action:'submitReport', data:item});
         if(res.status === 'success') {
-          const staffSent = !!res.notifications?.staff?.success;
-          const reporterSent = !!res.notifications?.reporter?.success;
-          let info = 'Laporan berhasil disimpan. ID Tiket: ' + item.ticket_id;
-          if(staffSent) info += ' Notifikasi petugas terkirim.';
-          if(reporterSent) info += ' Tanda terima WA pelapor terkirim.';
-          showToast(info);
-
-          if(!staffSent && res.office_wa_fallback) {
-            if(officeWaWindow && !officeWaWindow.closed) {
-              officeWaWindow.opener = null;
-              officeWaWindow.location.href = res.office_wa_fallback;
+          const waUrl = buildOfficeWhatsAppUrl(item);
+          if(waUrl) {
+            if(waWindow && !waWindow.closed) {
+              waWindow.opener = null;
+              waWindow.location.href = waUrl;
             } else {
-              showToast('Izinkan pop-up untuk membuka WhatsApp kantor.', 'info');
+              const waLink = document.createElement('a');
+              waLink.href = waUrl;
+              waLink.target = '_blank';
+              waLink.rel = 'noopener';
+              document.body.appendChild(waLink);
+              waLink.click();
+              waLink.remove();
             }
-          } else if(officeWaWindow && !officeWaWindow.closed) {
-            officeWaWindow.close();
+          } else if(waWindow && !waWindow.closed) {
+            waWindow.close();
           }
-
+          showToast('Laporan tersimpan. WhatsApp kantor dibuka dengan notifikasi siap dikirim. ID Tiket: ' + item.ticket_id);
           document.getElementById('form-pengaduan').reset();
-          setPelaporType('anonim');
+          setPelaporType('biasa');
+          document.getElementById('nama_pelapor').value = currentUser.nama || '';
+          document.getElementById('kontak_pelapor').value = currentUser.telepon || '';
           document.getElementById('input-ticket-id').value = item.ticket_id;
           window.location.hash = '#lacak';
         } else {
-          if(officeWaWindow && !officeWaWindow.closed) officeWaWindow.close();
+          if(waWindow && !waWindow.closed) waWindow.close();
           showToast(res.message||'Gagal mengirim laporan', 'error');
         }
       } catch(err) {
-        if(officeWaWindow && !officeWaWindow.closed) officeWaWindow.close();
+        if(waWindow && !waWindow.closed) waWindow.close();
         showToast('Koneksi ke server gagal', 'error');
         console.error(err);
       } finally {
@@ -1772,6 +1474,14 @@ try {
                 <span class="font-semibold text-slate-700">${escapeHtml(d.kategori)}</span>
               </div>
               <div>
+                <span class="block text-xs text-slate-400 font-medium">Tanggal Kejadian</span>
+                <span class="font-semibold text-slate-700">${escapeHtml(formatIncidentDate(d.tanggal_kejadian))}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Lokasi Kejadian</span>
+                <span class="font-semibold text-slate-700">${escapeHtml(d.lokasi_kejadian || '-')}</span>
+              </div>
+              <div>
                 <span class="block text-xs text-slate-400 font-medium">Pelapor</span>
                 <span class="font-semibold text-slate-700">${escapeHtml(d.nama_pelapor)}</span>
               </div>
@@ -1800,77 +1510,125 @@ try {
       }
     }
 
+    function getCitizenAccounts() { return Array.isArray(citizenAccounts) ? citizenAccounts : []; }
+
+    function togglePassword(id, button) {
+      const input = document.getElementById(id);
+      input.type = input.type === 'password' ? 'text' : 'password';
+      const icon = button.querySelector('i');
+      icon.classList.toggle('fa-eye'); icon.classList.toggle('fa-eye-slash');
+    }
+
+    function toggleConfirmableParty() {
+      const checked = document.getElementById('reg-add-party').checked;
+      document.getElementById('confirmable-party').classList.toggle('hidden', !checked);
+      ['reg-party-name','reg-party-email','reg-party-phone'].forEach(id => document.getElementById(id).required = checked);
+    }
+
+    function passwordIsStrong(value) {
+      return value.length >= 8 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /[0-9]/.test(value) && /[^A-Za-z0-9]/.test(value);
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const nik = document.getElementById('reg-nik').value.trim();
+      const username = document.getElementById('reg-username').value.trim();
+      const email = document.getElementById('reg-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-password').value;
+      const confirmation = document.getElementById('reg-password-confirm').value;
+      if(!/^\d{16}$/.test(nik)) return showToast('NIK harus terdiri dari 16 angka.', 'error');
+      if(!passwordIsStrong(password)) return showToast('Password harus memuat huruf besar, huruf kecil, angka, dan karakter khusus.', 'error');
+      if(password !== confirmation) return showToast('Konfirmasi password tidak sama.', 'error');
+      const button = document.getElementById('btn-submit-register');
+      button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Menyimpan...';
+      const account = {nik,username,email,password,role:'Masyarakat',nama:document.getElementById('reg-nama').value.trim(),tempat_tinggal:document.getElementById('reg-tempat').value.trim(),tanggal_lahir:document.getElementById('reg-lahir').value,jenis_kelamin:document.getElementById('reg-kelamin').value,telepon:document.getElementById('reg-telepon').value.trim(),pekerjaan:document.getElementById('reg-pekerjaan').value,disabilitas:document.getElementById('reg-disabilitas').value,pihak_konfirmasi:document.getElementById('reg-add-party').checked?{nama:document.getElementById('reg-party-name').value.trim(),email:document.getElementById('reg-party-email').value.trim(),telepon:document.getElementById('reg-party-phone').value.trim()}:null};
+      try {
+        const res = await apiPost({action:'registerCitizen',data:account});
+        if(res.status !== 'success') return showToast(res.message || 'Pendaftaran gagal.', 'error');
+        document.getElementById('form-daftar').reset(); toggleConfirmableParty(); document.getElementById('username').value=username;
+        showToast('Pendaftaran berhasil. Silakan masuk.'); window.location.hash='#login';
+      } catch(err) { showToast('Backend pendaftaran tidak dapat dihubungi.', 'error'); }
+      finally { button.disabled=false; button.innerHTML='<i class="fa-solid fa-user-check mr-2"></i>Daftar'; }
+    }
+
     async function handleLogin(e) {
       e.preventDefault();
       const btn = document.getElementById('btn-submit-login');
+      const identity = document.getElementById('username').value.trim().toLowerCase();
+      const password = document.getElementById('password').value;
+      if(!identity || !password) return showToast('Username/email dan password wajib diisi.', 'error');
+      if(!GAS_URL || GAS_URL.includes('PASTE_URL_WEB_APP')) {
+        return showToast('URL Web App Google Apps Script belum dipasang pada GAS_URL.', 'error');
+      }
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Memeriksa...';
       try {
-        const res = await apiGet('login', {
-          username: document.getElementById('username').value.trim().toLowerCase(),
-          password: document.getElementById('password').value.trim()
-        });
-        if(res.status === 'success') {
-          currentUser = res.data;
+        // Periksa akun Admin/Petugas terlebih dahulu agar tetap dapat login
+        // meskipun action citizenLogin belum tersedia pada deployment lama.
+        const staffRes = await apiGet('login', {username: identity, password});
+        if(staffRes.status === 'success') {
+          currentUser = staffRes.data;
           localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
-          enterDashboard(currentUser);
-          showToast('Selamat datang kembali, login berhasil.');
-        } else {
-          showToast(res.message || 'Username atau password salah', 'error');
+          await enterDashboard(currentUser);
+          showToast('Login petugas berhasil.');
+          return;
         }
+
+        // Jika bukan akun petugas, lanjutkan pemeriksaan akun masyarakat.
+        const citizenRes = await apiGet('citizenLogin', {identity, password});
+        if(citizenRes.status === 'success') {
+          currentUser = citizenRes.data;
+          localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+          enterCitizen(currentUser);
+          showToast('Login berhasil. Silakan isi formulir pengaduan.');
+          return;
+        }
+
+        showToast(staffRes.message || citizenRes.message || 'Username/email atau password salah.', 'error');
       } catch(err) {
-        showToast('Koneksi login bermasalah', 'error');
-        console.error(err);
+        console.error('Login error:', err);
+        showToast('Backend tidak dapat dihubungi. Periksa GAS_URL, akses deployment Web App, dan versi deployment terbaru.', 'error');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk Sekarang';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk';
       }
     }
 
-    function toggleForgotPassword(show) {
-      document.getElementById('forgot-panel').classList.toggle('hidden', !show);
-      document.getElementById('form-login').classList.toggle('hidden', show);
-      if(show) {
-        const phone = currentSettings.contact_phone || '';
-        const email = currentSettings.contact_email || '';
-        const parts = [];
-        if(phone && phone !== '-') parts.push('WA/Telp: ' + phone);
-        if(email) parts.push('Email: ' + email);
-        document.getElementById('fp-contact').innerText = parts.join('   •   ') || 'Silakan hubungi kantor KPU.';
-      }
+    function enterCitizen(user) {
+      currentUser = user; localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+      document.getElementById('nav-login').classList.add('hidden');
+      document.getElementById('nav-daftar').classList.add('hidden');
+      document.getElementById('nav-login-mobile').classList.add('hidden');
+      document.getElementById('nav-daftar-mobile').classList.add('hidden');
+      document.getElementById('nav-login').classList.add('hidden');
+      document.getElementById('nav-daftar').classList.add('hidden');
+      document.getElementById('nav-login-mobile').classList.add('hidden');
+      document.getElementById('nav-daftar-mobile').classList.add('hidden');
+      document.getElementById('nav-logout').classList.remove('hidden');
+      document.getElementById('nav-logout-mobile').classList.remove('hidden');
+      switchTab('lapor'); updateComplaintAccess();
+      window.location.hash = '#lapor';
     }
 
-    async function handleResetPassword(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btn-reset-pass');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Memproses...';
-      try {
-        const data = {
-          username: document.getElementById('fp-username').value.trim().toLowerCase(),
-          nip: document.getElementById('fp-nip').value.trim(),
-          email: document.getElementById('fp-email').value.trim().toLowerCase(),
-          new_password: document.getElementById('fp-newpass').value.trim()
-        };
-        const res = await apiPost({action:'resetPassword', data});
-        if(res.status === 'success') {
-          showToast(res.message || 'Password berhasil direset.');
-          document.getElementById('form-forgot').reset();
-          toggleForgotPassword(false);
-          document.getElementById('username').value = data.username;
-        } else {
-          showToast(res.message || 'Gagal reset password', 'error');
-        }
-      } catch(err) {
-        showToast('Koneksi bermasalah', 'error');
-        console.error(err);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-rotate mr-1"></i>Reset Password';
+    function updateComplaintAccess() {
+      const allowed = currentUser && String(currentUser.role||'').toLowerCase() === 'masyarakat';
+      const gate = document.getElementById('complaint-auth-gate');
+      const form = document.getElementById('form-pengaduan');
+      const welcome = document.getElementById('citizen-welcome');
+      if(!gate || !form) return;
+      gate.classList.toggle('hidden', allowed); form.classList.toggle('hidden', !allowed); welcome.classList.toggle('hidden', !allowed);
+      if(allowed) {
+        welcome.innerHTML = `<i class="fa-solid fa-circle-check mr-2"></i>Masuk sebagai <strong>${escapeHtml(currentUser.nama)}</strong> (${escapeHtml(currentUser.username)}). Data identitas diambil dari akun terdaftar.`;
+        setPelaporType('biasa');
+        document.getElementById('nama_pelapor').value = currentUser.nama || '';
+        document.getElementById('kontak_pelapor').value = currentUser.telepon || '';
+        document.getElementById('nama_pelapor').readOnly = true;
+        document.getElementById('kontak_pelapor').readOnly = true;
       }
     }
 
     async function enterDashboard(user) {
+      if(String(user.role||'').toLowerCase() === 'masyarakat') return enterCitizen(user);
       currentUser = user;
       localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
       
@@ -1895,13 +1653,14 @@ try {
       await loadDashboardData();
     }
 
-    async function logout() {
-      try { await apiGet('logout'); } catch(e) {}
-      currentUser = null;
-      localStorage.removeItem('kpu_current_user');
+    function logout() {
+      currentUser = null; localStorage.removeItem('kpu_current_user');
       ['nav-logout','nav-logout-mobile','nav-dashboard','nav-dashboard-mobile'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+      ['nav-login','nav-daftar','nav-login-mobile','nav-daftar-mobile'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
       document.getElementById('admin-menu').classList.add('hidden');
       document.getElementById('form-pengaduan')?.reset();
+      updateComplaintAccess();
+      // Tampilkan halaman masuk secara langsung. Ini tetap bekerja meskipun hash URL sudah #login.
       switchTab('login');
       if (window.location.hash !== '#login') window.location.hash = '#login';
       showToast('Sesi login telah ditutup.', 'info');
@@ -1924,13 +1683,61 @@ try {
       if(name === 'kategori') renderCategoryList();
       if(name === 'publik') renderPublicSettingsForm();
       if(name === 'akun') renderUserTable();
+      if(name === 'pelapor') renderCitizenTable();
     }
+
+    function renderCitizenTable() {
+      const accounts = getCitizenAccounts();
+      citizenAccounts = accounts;
+      const q = (document.getElementById('search-citizen')?.value || '').trim().toLowerCase();
+      const data = accounts.filter(a => [a.nama,a.nik,a.username,a.email,a.telepon,a.tempat_tinggal,a.pekerjaan].join(' ').toLowerCase().includes(q));
+      const count = document.getElementById('citizen-count');
+      const tbody = document.getElementById('citizen-table');
+      const empty = document.getElementById('no-citizen');
+      if(count) count.innerText = accounts.length + ' akun';
+      if(!tbody || !empty) return;
+      empty.classList.toggle('hidden', data.length > 0);
+      tbody.innerHTML = data.map(a => {
+        const party = a.pihak_konfirmasi;
+        return `
+          <tr class="align-top hover:bg-slate-50 transition">
+            <td class="py-4 px-4"><strong class="text-slate-800">${escapeHtml(a.nama || '-')}</strong><br><span class="text-xs text-slate-500">NIK: ${escapeHtml(a.nik || '-')}</span></td>
+            <td class="py-4 px-4"><span class="font-bold text-red-900">@${escapeHtml(a.username || '-')}</span><br><span class="text-xs text-slate-600">${escapeHtml(a.email || '-')}</span><br><span class="text-xs text-slate-600"><i class="fa-brands fa-whatsapp text-green-600 mr-1"></i>${escapeHtml(a.telepon || '-')}</span></td>
+            <td class="py-4 px-4"><span class="text-slate-700">${escapeHtml(a.tempat_tinggal || '-')}</span><br><span class="text-xs text-slate-500">Lahir: ${escapeHtml(formatIncidentDate(a.tanggal_lahir))}</span></td>
+            <td class="py-4 px-4"><span class="text-slate-700">${escapeHtml(a.jenis_kelamin || '-')}</span><br><span class="text-xs text-slate-500">${escapeHtml(a.pekerjaan || '-')}</span><br><span class="text-xs text-slate-500">Disabilitas: ${escapeHtml(a.disabilitas || '-')}</span></td>
+            <td class="py-4 px-4">${party ? `<strong class="text-slate-700">${escapeHtml(party.nama || '-')}</strong><br><span class="text-xs text-slate-500">${escapeHtml(party.email || '-')}</span><br><span class="text-xs text-slate-500">${escapeHtml(party.telepon || '-')}</span>` : '<span class="text-slate-400">Tidak ada</span>'}</td>
+            <td class="py-4 px-4 text-xs text-slate-600">${formatDate(a.created_at)}</td>
+            <td class="py-4 px-4 text-center">
+              <button type="button" onclick="deleteCitizenAccount('${escapeHtml(a.nik || '')}')" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition shadow-sm" title="Hapus data pelapor" aria-label="Hapus data pelapor ${escapeHtml(a.nama || '')}">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function deleteCitizenAccount(nik) {
+      const account = citizenAccounts.find(a => String(a.nik) === String(nik));
+      if(!account) return showToast('Data pelapor tidak ditemukan.', 'error');
+      confirmAction('Hapus Data Pelapor', `Hapus akun pelapor "${account.nama}"?`, async () => {
+        const res = await apiPost({action:'deleteCitizen',nik});
+        if(res.status === 'success') { citizenAccounts=citizenAccounts.filter(a=>String(a.nik)!==String(nik)); renderCitizenTable(); showToast('Data pelapor berhasil dihapus.'); }
+        else showToast(res.message || 'Gagal menghapus data pelapor.', 'error');
+      });
+    }
+
+    window.addEventListener('storage', event => {
+      if(event.key === 'kpu_citizen_accounts') {
+        citizenAccounts = getCitizenAccounts();
+        if(!document.getElementById('admin-view-pelapor')?.classList.contains('hidden')) renderCitizenTable();
+      }
+    });
 
     function renderReportTable() {
       const q = (document.getElementById('search-report')?.value||'').toLowerCase();
       const f = document.getElementById('filter-status')?.value||'semua';
       const data = currentReports.filter(r => {
-        const text = [r.ticket_id, r.nama_pelapor, r.kategori, r.subjek, r.status].join(' ').toLowerCase();
+        const text = [r.ticket_id, r.nama_pelapor, getReporterWhatsApp(r), r.kategori, r.subjek, r.status].join(' ').toLowerCase();
         return text.includes(q) && (f === 'semua' || String(r.status||'').toLowerCase() === String(f).toLowerCase());
       });
       
@@ -1953,6 +1760,9 @@ try {
           </td>
           <td class="py-3 px-6 font-semibold text-slate-700">${escapeHtml(r.nama_pelapor)}</td>
           <td class="py-3 px-6">
+            ${getReporterWhatsApp(r) && getReporterWhatsApp(r) !== '-' ? `<a href="${buildReporterReplyWhatsAppUrl(r)}" target="_blank" rel="noopener" class="font-semibold text-green-700 hover:underline whitespace-nowrap"><i class="fa-brands fa-whatsapp mr-1"></i>${escapeHtml(getReporterWhatsApp(r))}</a>` : '<span class="text-slate-400">-</span>'}
+          </td>
+          <td class="py-3 px-6">
             <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${escapeHtml(r.kategori)}</span>
             <br><span class="font-bold text-slate-800 line-clamp-2 mt-1">${escapeHtml(r.subjek)}</span>
           </td>
@@ -1960,8 +1770,8 @@ try {
           <td class="py-3 px-6 text-center">
             <div class="flex justify-center gap-1">
               <button onclick="openModal('${r.ticket_id}')" class="px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded-lg text-xs font-bold transition shadow-sm" title="Lihat Detail">Detail</button>
-              <button onclick="sendReporterNotification('${r.ticket_id}')" class="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg text-xs font-bold transition shadow-sm" title="Kirim Notifikasi WhatsApp Pelapor"><i class="fa-brands fa-whatsapp"></i></button>
-              ${isAdmin ? `<button onclick="deleteReport('${r.ticket_id}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-bold transition shadow-sm" title="Hapus Laporan"><i class="fa-solid fa-trash"></i></button>` : ''}
+              <button onclick="openReporterWhatsApp('${r.ticket_id}')" class="inline-flex items-center justify-center w-9 h-9 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition shadow-sm" title="Kirim WhatsApp ke pelapor" aria-label="Kirim WhatsApp ke pelapor"><i class="fa-brands fa-whatsapp text-base"></i></button>
+              ${isAdmin ? `<button onclick="deleteReport('${r.ticket_id}')" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition shadow-sm" title="Hapus Laporan"><i class="fa-solid fa-trash"></i></button>` : ''}
             </div>
           </td>
         </tr>
@@ -1977,8 +1787,10 @@ try {
       document.getElementById('modal-title-ticket-id').innerText = r.ticket_id;
       document.getElementById('modal-title-subject').innerText = r.subjek;
       document.getElementById('modal-nama').innerText = r.nama_pelapor || '-';
-      document.getElementById('modal-kontak').innerText = r.kontak_pelapor || '-';
+      document.getElementById('modal-kontak').innerText = getReporterWhatsApp(r) || '-';
       document.getElementById('modal-kategori').innerText = r.kategori || '-';
+      document.getElementById('modal-tanggal-kejadian').innerText = formatIncidentDate(r.tanggal_kejadian);
+      document.getElementById('modal-lokasi-kejadian').innerText = r.lokasi_kejadian || '-';
       document.getElementById('modal-bukti').innerHTML = r.bukti_link ? `<a href="${escapeHtml(r.bukti_link)}" target="_blank" class="text-red-850 font-bold underline">Buka Link Bukti</a>` : '-';
       document.getElementById('modal-deskripsi').innerText = r.deskripsi || '-';
       document.getElementById('modal-ticket-id').value = r.ticket_id;
@@ -1993,72 +1805,20 @@ try {
 
     async function saveStatus(e) {
       e.preventDefault();
-      const sendNotification = e.submitter?.value === 'save-send-wa';
-      const waWindow = sendNotification ? window.open('about:blank', 'sipena_reporter_whatsapp') : null;
       const payload = {
         action: 'updateReportStatus',
         ticketId: document.getElementById('modal-ticket-id').value,
         status: document.getElementById('modal-status').value,
-        tanggapan: document.getElementById('modal-tanggapan').value,
-        send_notification: sendNotification
+        tanggapan: document.getElementById('modal-tanggapan').value
       };
       const res = await apiPost(payload);
       if(res.status === 'success') {
-        if(sendNotification) {
-          if(res.notification?.success) {
-            if(waWindow && !waWindow.closed) waWindow.close();
-            showToast('Status diperbarui dan notifikasi WhatsApp terkirim.');
-          } else if(res.wa_fallback_url) {
-            showToast('Status tersimpan. WhatsApp manual akan dibuka.', 'info');
-            if(waWindow && !waWindow.closed) {
-              waWindow.opener = null;
-              waWindow.location.href = res.wa_fallback_url;
-            } else {
-              window.open(res.wa_fallback_url, '_blank', 'noopener');
-            }
-          } else {
-            if(waWindow && !waWindow.closed) waWindow.close();
-            showToast(res.notification?.message || 'Status tersimpan, tetapi nomor WhatsApp pelapor tidak tersedia.', 'info');
-          }
-        } else {
-          showToast('Respon aduan berhasil diperbarui.');
-        }
+        showToast('Respon aduan berhasil diperbarui');
         closeModal();
         await loadDashboardData();
       } else {
-        if(waWindow && !waWindow.closed) waWindow.close();
         showToast(res.message || 'Gagal menyimpan pembaruan status', 'error');
       }
-    }
-
-    async function sendReporterNotification(ticketId) {
-      const waWindow = window.open('about:blank', 'sipena_reporter_whatsapp');
-      const res = await apiPost({action:'sendReporterNotification', ticketId});
-      if(res.status === 'success') {
-        if(res.notification?.success) {
-          if(waWindow && !waWindow.closed) waWindow.close();
-          showToast('Notifikasi WhatsApp kepada pelapor berhasil dikirim.');
-        } else if(res.wa_fallback_url) {
-          showToast('Gateway otomatis belum mengirim. WhatsApp manual dibuka.', 'info');
-          if(waWindow && !waWindow.closed) {
-            waWindow.opener = null;
-            waWindow.location.href = res.wa_fallback_url;
-          } else {
-            window.open(res.wa_fallback_url, '_blank', 'noopener');
-          }
-        } else {
-          if(waWindow && !waWindow.closed) waWindow.close();
-          showToast(res.notification?.message || 'Nomor WhatsApp pelapor tidak tersedia.', 'error');
-        }
-      } else {
-        if(waWindow && !waWindow.closed) waWindow.close();
-        showToast(res.message || 'Gagal menyiapkan notifikasi WhatsApp.', 'error');
-      }
-    }
-
-    function sendCurrentReporterNotification() {
-      const ticketId = document.getElementById('modal-ticket-id').value;
-      if(ticketId) sendReporterNotification(ticketId);
     }
 
     /* FITUR TAMBAHAN: Hapus Laporan Khusus Admin */
@@ -2080,9 +1840,8 @@ try {
       document.getElementById('setting-wa-enabled').value = String(currentSettings.wa_enabled||'false');
       document.getElementById('setting-wa-token').value = currentSettings.wa_token||'';
       document.getElementById('setting-wa-target').value = currentSettings.wa_target||'';
-      document.getElementById('setting-wa-auto-staff').value = String(currentSettings.wa_auto_staff||'true');
-      document.getElementById('setting-wa-auto-reporter').value = String(currentSettings.wa_auto_reporter||'true');
-      document.getElementById('setting-wa-auto-staff-status').value = String(currentSettings.wa_auto_staff_status||'false');
+      pendingLogoData = localStorage.getItem(LOGO_STORAGE_KEY) || pendingLogoData || '';
+      applyUploadedLogo(pendingLogoData || DEFAULT_LOGO_URL);
       renderPublicSettingsForm();
     }
 
@@ -2091,13 +1850,66 @@ try {
       if(!titleEl) return;
       titleEl.value = currentSettings.public_service_title||'Layanan Pengaduan Masyarakat';
       document.getElementById('public-setting-desc').value = currentSettings.public_service_desc||'';
+      renderPublicCardEditor();
+    }
+
+    /* PERBAIKAN: Fungsi Tambah, Collect, & Render Cards diringkas agar sinkron dengan state */
+    function renderPublicCardEditor() {
+      const wrap = document.getElementById('public-card-editor'); 
+      if(!wrap) return;
+      wrap.innerHTML = getPublicCards().map((c, i) => `
+        <div class="public-card-row grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-slate-50 p-3 rounded-lg border border-slate-150 animate-fade-in">
+          <div class="md:col-span-2">
+            <label class="text-[11px] font-bold text-slate-500 block mb-1">FontAwesome Icon</label>
+            <input data-field="icon" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" value="${escapeHtml(c.icon||'fa-circle-info')}">
+          </div>
+          <div class="md:col-span-3">
+            <label class="text-[11px] font-bold text-slate-500 block mb-1">Judul Layanan</label>
+            <input data-field="title" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Contoh: Layanan Data" value="${escapeHtml(c.title||'')}">
+          </div>
+          <div class="md:col-span-6">
+            <label class="text-[11px] font-bold text-slate-500 block mb-1">Uraian / Deskripsi Singkat</label>
+            <input data-field="desc" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs" placeholder="Penjelasan singkat layanan..." value="${escapeHtml(c.desc||'')}">
+          </div>
+          <div class="md:col-span-1">
+            <button type="button" onclick="removePublicCardRow(${i})" class="w-full py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-bold transition shadow-sm">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function collectPublicCards() {
+      return [...document.querySelectorAll('#public-card-editor .public-card-row')].map(row => ({
+        icon: (row.querySelector('[data-field="icon"]')?.value || 'fa-circle-info').trim(),
+        title: (row.querySelector('[data-field="title"]')?.value || '').trim(),
+        desc: (row.querySelector('[data-field="desc"]')?.value || '').trim()
+      }));
+    }
+
+    function addPublicCardRow() {
+      const cards = collectPublicCards(); 
+      cards.push({icon:'fa-circle-info', title:'', desc:''}); 
+      currentSettings.public_cards_json = JSON.stringify(cards); 
+      renderPublicCardEditor();
+    }
+
+    function removePublicCardRow(index) {
+      const cards = collectPublicCards();
+      cards.splice(index, 1);
+      currentSettings.public_cards_json = JSON.stringify(cards);
+      renderPublicCardEditor();
     }
 
     async function savePublicSettings(e) {
       e.preventDefault();
+      // Hanya simpan cards yang memiliki judul (title tidak kosong)
+      const validCards = collectPublicCards().filter(c => c.title !== '');
       const data = {
         public_service_title: document.getElementById('public-setting-title').value.trim(),
-        public_service_desc: document.getElementById('public-setting-desc').value.trim()
+        public_service_desc: document.getElementById('public-setting-desc').value.trim(),
+        public_cards_json: JSON.stringify(validCards)
       };
       const res = await apiPost({action:'updateSettings', data});
       if(res.status === 'success') {
@@ -2116,16 +1928,21 @@ try {
         contact_phone: document.getElementById('setting-phone').value,
         wa_enabled: document.getElementById('setting-wa-enabled').value,
         wa_token: document.getElementById('setting-wa-token').value.trim(),
-        wa_target: document.getElementById('setting-wa-target').value.trim(),
-        wa_auto_staff: document.getElementById('setting-wa-auto-staff').value,
-        wa_auto_reporter: document.getElementById('setting-wa-auto-reporter').value,
-        wa_auto_staff_status: document.getElementById('setting-wa-auto-staff-status').value
+        wa_target: document.getElementById('setting-wa-target').value.trim()
       };
+      if(pendingLogoData && pendingLogoData.startsWith('data:image/')) {
+        const logoRes = await apiPost({action:'uploadLogo', dataUrl:pendingLogoData, fileName:'logo-aplikasi'});
+        if(logoRes.status !== 'success') return showToast(logoRes.message || 'Upload logo gagal.', 'error');
+        data.logo_url = logoRes.data.logo_url;
+        pendingLogoData = data.logo_url;
+      }
       const res = await apiPost({action:'updateSettings', data});
       if(res.status === 'success') {
         currentSettings = {...currentSettings, ...data};
+        currentSettings.logo_url = data.logo_url || currentSettings.logo_url || '';
+        applyUploadedLogo(currentSettings.logo_url || DEFAULT_LOGO_URL);
         renderContactInfo();
-        showToast('Informasi Kontak KPU berhasil diperbarui.');
+        showToast('Informasi kontak dan logo aplikasi berhasil diperbarui.');
       } else {
         showToast(res.message||'Gagal menyimpan pengaturan kontak', 'error');
       }
@@ -2138,8 +1955,8 @@ try {
             <i class="fa-solid fa-tag text-red-900 mr-2"></i>${escapeHtml(c)}
           </span>
           <div class="flex gap-1">
-            <button onclick="editCategoryByIndex(${idx})" class="px-2.5 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded text-xs font-bold transition shadow-sm">Edit</button>
-            <button onclick="deleteCategoryByIndex(${idx})" class="px-2.5 py-1 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded text-xs font-bold transition shadow-sm">Hapus</button>
+            <button onclick="editCategoryByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition shadow-sm" title="Edit kategori" aria-label="Edit kategori"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteCategoryByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-lg transition shadow-sm" title="Hapus kategori" aria-label="Hapus kategori"><i class="fa-solid fa-trash"></i></button>
           </div>
         </div>
       `).join('') || '<div class="text-sm text-slate-400">Belum ada kategori aduan.</div>';
@@ -2195,27 +2012,23 @@ try {
       document.getElementById('user-table').innerHTML = currentUsers.map((u, idx) => `
         <tr class="hover:bg-slate-50 transition border-b border-slate-100">
           <td class="py-3 px-6 font-mono font-bold text-red-900">${escapeHtml(u.username)}</td>
-          <td class="py-3 px-6 text-slate-600 font-mono text-xs">${escapeHtml(u.nip || '-')}</td>
           <td class="py-3 px-6 text-slate-700 font-semibold">${escapeHtml(u.nama_petugas)}</td>
-          <td class="py-3 px-6 text-slate-600 text-xs">${escapeHtml(u.email || '-')}</td>
           <td class="py-3 px-6">
             <span class="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 text-xs font-bold">${escapeHtml(u.role)}</span>
           </td>
           <td class="py-3 px-6 text-center flex justify-center gap-2">
-            <button onclick="editUserByIndex(${idx})" class="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-750 text-xs font-bold rounded-lg transition shadow-sm">Edit</button>
-            <button onclick="deleteUserByIndex(${idx})" class="px-3 py-1 bg-rose-100 hover:bg-rose-200 text-rose-750 text-xs font-bold rounded-lg transition shadow-sm">Hapus</button>
+            <button onclick="editUserByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-blue-100 hover:bg-blue-200 text-blue-750 rounded-lg transition shadow-sm" title="Edit akun" aria-label="Edit akun"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteUserByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 hover:bg-rose-200 text-rose-750 rounded-lg transition shadow-sm" title="Hapus akun" aria-label="Hapus akun"><i class="fa-solid fa-trash"></i></button>
           </td>
         </tr>
-      `).join('') || '<tr><td colspan="6" class="p-6 text-center text-slate-400">Belum ada akun terdaftar.</td></tr>';
+      `).join('') || '<tr><td colspan="4" class="p-6 text-center text-slate-400">Belum ada akun terdaftar.</td></tr>';
     }
 
     function editUserByIndex(index) {
       const u = currentUsers[index];
       if(!u) return;
       document.getElementById('user-username').value = u.username;
-      document.getElementById('user-nip').value = u.nip || '';
-      document.getElementById('user-email').value = u.email || '';
-      document.getElementById('user-password').value = ''; // hash tidak bisa ditampilkan; kosongkan = password lama dipertahankan
+      document.getElementById('user-password').value = u.password;
       document.getElementById('user-name').value = u.nama_petugas;
       document.getElementById('user-role').value = u.role;
       document.getElementById('btn-save-user').innerHTML = '<i class="fa-solid fa-user-pen mr-1"></i> Update Akun';
@@ -2228,8 +2041,6 @@ try {
         username: document.getElementById('user-username').value.trim().toLowerCase(),
         password: document.getElementById('user-password').value.trim(),
         nama_petugas: document.getElementById('user-name').value.trim(),
-        nip: document.getElementById('user-nip').value.trim(),
-        email: document.getElementById('user-email').value.trim().toLowerCase(),
         role: document.getElementById('user-role').value
       };
       const res = await apiPost({action:'saveUser', data});
@@ -2318,21 +2129,6 @@ try {
       if(payload.action === 'updateSettings') {
         db.settings = {...db.settings, ...payload.data};
         return Promise.resolve({status:'success', message:'Pengaturan berhasil disimpan.'});
-      }
-      if(payload.action === 'resetPassword') {
-        const d = payload.data || {};
-        const uname = String(d.username||'').trim().toLowerCase();
-        const nip = String(d.nip||'').trim();
-        const email = String(d.email||'').trim().toLowerCase();
-        const np = String(d.new_password||'').trim();
-        if(!uname || !nip || !email || !np) return Promise.resolve({status:'error', message:'Username, NIP, email, dan password baru wajib diisi.'});
-        if(np.length < 6) return Promise.resolve({status:'error', message:'Password baru minimal 6 karakter.'});
-        const u = db.users.find(x => String(x.username).trim().toLowerCase() === uname);
-        if(!u) return Promise.resolve({status:'error', message:'Username tidak terdaftar.'});
-        if(!String(u.nip||'').trim() || !String(u.email||'').trim()) return Promise.resolve({status:'error', message:'Data NIP/email akun belum lengkap. Hubungi Administrator.'});
-        if(String(u.nip).trim() !== nip || String(u.email).trim().toLowerCase() !== email) return Promise.resolve({status:'error', message:'NIP atau email tidak cocok dengan data akun.'});
-        u.password = np;
-        return Promise.resolve({status:'success', message:'Password berhasil direset. Silakan login dengan password baru.'});
       }
       if(payload.action === 'saveCategory') {
         const k = payload.data.kategori;
