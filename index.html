@@ -264,6 +264,44 @@
 </head>
 <body class="text-slate-800">
 
+  <!-- Penanda ini hanya diproses saat index disajikan oleh Apps Script HTML Service. -->
+  <div id="sipena-runtime-marker" class="hidden"
+       data-runtime="<?= runtimeMarker ?>"
+       data-webapp-url="<?= webAppUrl ?>"
+       data-build="<?= buildVersion ?>"></div>
+
+  <div id="gas-connection-gate" class="fixed inset-0 z-[2147483647] hidden items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl border border-slate-200">
+      <div class="flex items-start gap-4">
+        <div class="w-12 h-12 shrink-0 rounded-2xl bg-red-100 text-red-800 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-plug-circle-xmark"></i>
+        </div>
+        <div class="min-w-0">
+          <h2 class="text-lg font-black text-slate-900">Frontend belum berjalan melalui Google Apps Script</h2>
+          <p id="gas-connection-detail" class="mt-2 text-sm leading-relaxed text-slate-600">Menunggu jembatan Google Apps Script...</p>
+        </div>
+      </div>
+      <div class="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-950">
+        File <b>index.html</b> aplikasi utama harus dibuat sebagai file HTML bernama <b>index</b> di proyek Apps Script dan dibuka melalui URL deployment Web App yang berakhiran <b>/exec</b>.
+      </div>
+      <div class="mt-5">
+        <label class="text-xs font-bold text-slate-700">URL Web App Apps Script</label>
+        <input id="gas-webapp-url-input" type="url" class="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-800" placeholder="https://script.google.com/macros/s/DEPLOYMENT_ID/exec">
+      </div>
+      <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button type="button" onclick="openConfiguredGasApp('lapor')" class="rounded-xl bg-red-900 px-4 py-3 text-sm font-extrabold text-white hover:bg-red-800">
+          <i class="fa-solid fa-arrow-up-right-from-square mr-2"></i>Buka Aplikasi
+        </button>
+        <button type="button" onclick="openConfiguredGasApp('login')" class="rounded-xl bg-slate-800 px-4 py-3 text-sm font-extrabold text-white hover:bg-slate-900">
+          <i class="fa-solid fa-right-to-bracket mr-2"></i>Buka Login
+        </button>
+      </div>
+      <button type="button" onclick="retryGasConnection()" class="mt-3 w-full rounded-xl border border-slate-300 px-4 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50">
+        <i class="fa-solid fa-rotate mr-1"></i>Periksa Ulang Koneksi
+      </button>
+    </div>
+  </div>
+
   <div id="kpu-app-container" class="flex flex-col relative">
     
     <!-- PERBAIKAN Z-INDEX: Memasukkan elemen Toast dan Modal ke dalam kpu-app-container agar tidak tersembunyi di balik background -->
@@ -906,23 +944,112 @@
   <script>
     /* KONFIGURASI GOOGLE APPS SCRIPT */
     const IS_PREVIEW = false;
-    let SESSION_TOKEN = localStorage.getItem('sipena_session_token') || '';
 
-    function gasCall(request) {
+    function storageGet(key) {
+      try { return window.localStorage.getItem(key) || ''; } catch (e) { return ''; }
+    }
+    function storageSet(key, value) {
+      try { window.localStorage.setItem(key, value); } catch (e) {}
+    }
+    function storageRemove(key) {
+      try { window.localStorage.removeItem(key); } catch (e) {}
+    }
+
+    let SESSION_TOKEN = storageGet('sipena_session_token');
+
+    function hasGasBridge() {
+      return !!(window.google && window.google.script && window.google.script.run);
+    }
+
+    function waitForGasBridge(timeoutMs = 15000) {
       return new Promise((resolve, reject) => {
-        if (!(window.google && google.script && google.script.run)) {
-          reject(new Error('Frontend tidak terhubung ke Google Apps Script. Buka aplikasi melalui URL deployment Web App, bukan file index.html langsung atau GitHub Pages.'));
-          return;
-        }
+        const started = Date.now();
+        const timer = setInterval(() => {
+          if (hasGasBridge()) {
+            clearInterval(timer);
+            resolve(true);
+            return;
+          }
+          if (Date.now() - started >= timeoutMs) {
+            clearInterval(timer);
+            reject(new Error('Jembatan google.script.run tidak tersedia. Halaman ini tidak sedang disajikan oleh Apps Script HTML Service.'));
+          }
+        }, 100);
+      });
+    }
 
+    function runtimeInfo() {
+      const el = document.getElementById('sipena-runtime-marker');
+      return {
+        runtime: String(el?.dataset?.runtime || ''),
+        webAppUrl: String(el?.dataset?.webappUrl || ''),
+        build: String(el?.dataset?.build || '')
+      };
+    }
+
+    function showGasConnectionGate(message) {
+      const gate = document.getElementById('gas-connection-gate');
+      const detail = document.getElementById('gas-connection-detail');
+      const input = document.getElementById('gas-webapp-url-input');
+      if (detail) detail.textContent = message || 'Frontend tidak terhubung ke backend Apps Script.';
+      const configured = storageGet('sipena_gas_webapp_url');
+      const injected = runtimeInfo().webAppUrl;
+      if (input && !input.value) input.value = configured || (/^https:\/\/script\.google\.com\//.test(injected) ? injected : '');
+      if (gate) {
+        gate.classList.remove('hidden');
+        gate.classList.add('flex');
+      }
+    }
+
+    function hideGasConnectionGate() {
+      const gate = document.getElementById('gas-connection-gate');
+      if (gate) {
+        gate.classList.add('hidden');
+        gate.classList.remove('flex');
+      }
+    }
+
+    function normalizeGasWebAppUrl(value) {
+      const url = String(value || '').trim().replace(/[?#].*$/, '').replace(/\/$/, '');
+      return /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(url) ? url : '';
+    }
+
+    function openConfiguredGasApp(page) {
+      const input = document.getElementById('gas-webapp-url-input');
+      const url = normalizeGasWebAppUrl(input?.value || '');
+      if (!url) {
+        if (input) input.focus();
+        showToast('Masukkan URL Web App yang valid dan berakhiran /exec.', 'error');
+        return;
+      }
+      storageSet('sipena_gas_webapp_url', url);
+      const target = url + '?page=' + encodeURIComponent(page || 'lapor');
+      window.top.location.href = target;
+    }
+
+    async function retryGasConnection() {
+      const detail = document.getElementById('gas-connection-detail');
+      if (detail) detail.textContent = 'Memeriksa ulang jembatan Google Apps Script...';
+      try {
+        await waitForGasBridge(5000);
+        hideGasConnectionGate();
+        window.location.reload();
+      } catch (err) {
+        showGasConnectionGate(err.message);
+      }
+    }
+
+    async function gasCall(request) {
+      await waitForGasBridge();
+      return new Promise((resolve, reject) => {
         let finished = false;
         const timeoutId = setTimeout(() => {
           if (finished) return;
           finished = true;
-          reject(new Error('Backend tidak merespons dalam 30 detik. Periksa deployment dan izin akses Web App.'));
+          reject(new Error('Backend tidak merespons dalam 30 detik. Periksa deployment, otorisasi, dan akses Web App.'));
         }, 30000);
 
-        google.script.run
+        window.google.script.run
           .withSuccessHandler(result => {
             if (finished) return;
             finished = true;
@@ -995,8 +1122,8 @@
 
     function getWebAppLocation() {
       return new Promise(resolve => {
-        if (window.google && google.script && google.script.url && typeof google.script.url.getLocation === 'function') {
-          google.script.url.getLocation(location => resolve(location || {}));
+        if (window.google && window.google.script && window.google.script.url && typeof window.google.script.url.getLocation === 'function') {
+          window.google.script.url.getLocation(location => resolve(location || {}));
           return;
         }
         resolve({
@@ -1007,8 +1134,8 @@
     }
 
     function registerHistoryHandler() {
-      if (window.google && google.script && google.script.history && typeof google.script.history.setChangeHandler === 'function') {
-        google.script.history.setChangeHandler(event => {
+      if (window.google && window.google.script && window.google.script.history && typeof window.google.script.history.setChangeHandler === 'function') {
+        window.google.script.history.setChangeHandler(event => {
           const location = event?.location || {};
           const route = normalizeRoute(
             event?.state?.page ||
@@ -1030,13 +1157,13 @@
       const normalized = normalizeRoute(route);
       CURRENT_ROUTE = normalized;
 
-      if (window.google && google.script && google.script.history) {
+      if (window.google && window.google.script && window.google.script.history) {
         const state = {page: normalized};
         const params = {page: normalized};
-        if (replaceHistory && typeof google.script.history.replace === 'function') {
-          google.script.history.replace(state, params, normalized);
-        } else if (typeof google.script.history.push === 'function') {
-          google.script.history.push(state, params, normalized);
+        if (replaceHistory && typeof window.google.script.history.replace === 'function') {
+          window.google.script.history.replace(state, params, normalized);
+        } else if (typeof window.google.script.history.push === 'function') {
+          window.google.script.history.push(state, params, normalized);
         }
       } else if (window.location.hash !== '#' + normalized) {
         window.location.hash = '#' + normalized;
@@ -1048,6 +1175,17 @@
     async function bootApp() {
       document.getElementById('preview-banner').style.display = IS_PREVIEW ? 'flex' : 'none';
       setPelaporType('anonim');
+
+      if (!IS_PREVIEW) {
+        try {
+          await waitForGasBridge(15000);
+          hideGasConnectionGate();
+        } catch (err) {
+          showGasConnectionGate(err.message);
+          return;
+        }
+      }
+
       await refreshPublicData();
       
       apiGet('getPublicStats').then(res => {
@@ -1065,8 +1203,8 @@
       } catch(e) {
         currentUser = null;
       }
-      if(currentUser) localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
-      else localStorage.removeItem('kpu_current_user');
+      if(currentUser) storageSet('kpu_current_user', JSON.stringify(currentUser));
+      else storageRemove('kpu_current_user');
 
       registerHistoryHandler();
       const location = await getWebAppLocation();
@@ -1434,8 +1572,8 @@
 
         // Hapus token lama agar tidak mengganggu proses autentikasi baru.
         SESSION_TOKEN = '';
-        localStorage.removeItem('sipena_session_token');
-        localStorage.removeItem('kpu_current_user');
+        storageRemove('sipena_session_token');
+        storageRemove('kpu_current_user');
 
         const username = document.getElementById('username').value.trim().toLowerCase();
         const password = document.getElementById('password').value; // jangan trim password
@@ -1446,9 +1584,9 @@
 
         if(res && res.status === 'success' && res.token && res.data) {
           SESSION_TOKEN = res.token;
-          localStorage.setItem('sipena_session_token', SESSION_TOKEN);
+          storageSet('sipena_session_token', SESSION_TOKEN);
           currentUser = res.data;
-          localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+          storageSet('kpu_current_user', JSON.stringify(currentUser));
           setLoginConnectionStatus('Login berhasil. Membuka dashboard...', 'success');
           enterDashboard(currentUser);
           showToast('Selamat datang kembali, login berhasil.');
@@ -1513,7 +1651,7 @@
 
     async function enterDashboard(user) {
       currentUser = user;
-      localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+      storageSet('kpu_current_user', JSON.stringify(currentUser));
       
       document.getElementById('admin-display-name').innerText = user.nama_petugas||user.username; 
       const sideName = document.getElementById('admin-display-name-sidebar'); 
@@ -1540,8 +1678,8 @@
       try { await apiGet('logout'); } catch(e) {}
       currentUser = null;
       SESSION_TOKEN = '';
-      localStorage.removeItem('sipena_session_token');
-      localStorage.removeItem('kpu_current_user');
+      storageRemove('sipena_session_token');
+      storageRemove('kpu_current_user');
       ['nav-logout','nav-logout-mobile','nav-dashboard','nav-dashboard-mobile'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
       document.getElementById('admin-menu').classList.add('hidden');
       document.getElementById('form-pengaduan')?.reset();
