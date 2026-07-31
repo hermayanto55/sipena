@@ -368,9 +368,9 @@
             </div>
           </div>
           <nav class="hidden md:flex space-x-2">
-            <button onclick="window.location.hash='#lapor'" id="nav-lapor" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-white bg-red-850"><i class="fa-solid fa-pen-to-square"></i> Buat Laporan</button>
-            <button onclick="window.location.hash='#lacak'" id="nav-lacak" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-magnifying-glass"></i> Lacak Aduan</button>
-            <button onclick="window.location.hash='#dashboard'" id="nav-dashboard" class="hidden nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
+            <button onclick="navigateTo('lapor')" id="nav-lapor" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-white bg-red-850"><i class="fa-solid fa-pen-to-square"></i> Buat Laporan</button>
+            <button onclick="navigateTo('lacak')" id="nav-lacak" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-magnifying-glass"></i> Lacak Aduan</button>
+            <button onclick="navigateTo('dashboard')" id="nav-dashboard" class="hidden nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
             <button onclick="logout()" id="nav-logout" class="hidden px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 transition text-white flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
           </nav>
           <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-yellow-400">
@@ -380,9 +380,9 @@
       </div>
       <!-- Mobile Menu -->
       <div id="mobile-menu" class="hidden md:hidden bg-red-950 px-4 pt-2 pb-4 space-y-1 shadow-inner">
-        <button onclick="window.location.hash='#lapor';toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
-        <button onclick="window.location.hash='#lacak';toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
-        <button onclick="window.location.hash='#dashboard';toggleMobileMenu()" id="nav-dashboard-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-chart-line mr-2"></i>Dashboard</button>
+        <button onclick="navigateTo('lapor');toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
+        <button onclick="navigateTo('lacak');toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
+        <button onclick="navigateTo('dashboard');toggleMobileMenu()" id="nav-dashboard-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-chart-line mr-2"></i>Dashboard</button>
         <button onclick="logout();toggleMobileMenu()" id="nav-logout-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium bg-amber-600 text-white hover:bg-amber-700"><i class="fa-solid fa-right-from-bracket mr-2"></i>Logout</button>
       </div>
     </header>
@@ -391,7 +391,7 @@
     <div id="preview-banner" class="hidden bg-yellow-500 text-slate-950 font-semibold px-4 py-2 flex items-center justify-between text-xs sm:text-sm shadow-inner">
       <span class="flex items-center gap-2">
         <i class="fa-solid fa-triangle-exclamation animate-pulse"></i>
-        <span><strong>Mode Preview Aktif:</strong> Gunakan akhiran URL <b class="font-mono text-red-900 font-extrabold text-sm">#login</b> untuk mengakses halaman masuk petugas.</span>
+        <span><strong>Mode Preview Aktif:</strong> Gunakan parameter <b class="font-mono text-red-900 font-extrabold text-sm">?page=login</b> untuk membuka halaman masuk petugas.</span>
       </span>
       <div class="hidden sm:block text-xs bg-slate-900 text-white px-2 py-1 rounded">Mode Pratinjau</div>
     </div>
@@ -411,7 +411,7 @@
               <p class="mt-4 text-sm sm:text-base text-slate-600 max-w-xl leading-relaxed">Sistem Pengaduan Masyarakat KPU Kabupaten Tanjung Jabung Timur untuk pelayanan publik yang lebih responsif, transparan, dan terdokumentasi.</p>
               <div class="mt-7 flex flex-wrap gap-3">
                 <button onclick="document.getElementById('kategori').scrollIntoView({behavior:'smooth',block:'center'})" class="soft-btn px-5 py-3 rounded-2xl bg-red-800 hover:bg-red-900 text-white text-sm font-extrabold"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
-                <button onclick="window.location.hash='#lacak'" class="px-5 py-3 rounded-2xl bg-white hover:bg-red-50 text-red-900 text-sm font-extrabold border border-red-100"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
+                <button onclick="navigateTo('lacak')" class="px-5 py-3 rounded-2xl bg-white hover:bg-red-50 text-red-900 text-sm font-extrabold border border-red-100"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
               </div>
               
               <div class="mt-7 grid grid-cols-2 gap-4 max-w-lg">
@@ -985,6 +985,66 @@
 
     document.addEventListener('DOMContentLoaded', bootApp);
 
+    const VALID_ROUTES = ['lapor', 'lacak', 'login', 'dashboard'];
+    let CURRENT_ROUTE = 'lapor';
+
+    function normalizeRoute(value) {
+      const route = String(value || '').replace(/^#/, '').trim().toLowerCase();
+      return VALID_ROUTES.includes(route) ? route : 'lapor';
+    }
+
+    function getWebAppLocation() {
+      return new Promise(resolve => {
+        if (window.google && google.script && google.script.url && typeof google.script.url.getLocation === 'function') {
+          google.script.url.getLocation(location => resolve(location || {}));
+          return;
+        }
+        resolve({
+          hash: String(window.location.hash || '').replace(/^#/, ''),
+          parameter: {}
+        });
+      });
+    }
+
+    function registerHistoryHandler() {
+      if (window.google && google.script && google.script.history && typeof google.script.history.setChangeHandler === 'function') {
+        google.script.history.setChangeHandler(event => {
+          const location = event?.location || {};
+          const route = normalizeRoute(
+            event?.state?.page ||
+            location?.parameter?.page ||
+            location?.hash ||
+            'lapor'
+          );
+          applyRoute(route);
+        });
+        return;
+      }
+
+      window.addEventListener('hashchange', () => {
+        applyRoute(normalizeRoute(window.location.hash));
+      });
+    }
+
+    function navigateTo(route, replaceHistory = false) {
+      const normalized = normalizeRoute(route);
+      CURRENT_ROUTE = normalized;
+
+      if (window.google && google.script && google.script.history) {
+        const state = {page: normalized};
+        const params = {page: normalized};
+        if (replaceHistory && typeof google.script.history.replace === 'function') {
+          google.script.history.replace(state, params, normalized);
+        } else if (typeof google.script.history.push === 'function') {
+          google.script.history.push(state, params, normalized);
+        }
+      } else if (window.location.hash !== '#' + normalized) {
+        window.location.hash = '#' + normalized;
+      }
+
+      applyRoute(normalized);
+    }
+
     async function bootApp() {
       document.getElementById('preview-banner').style.display = IS_PREVIEW ? 'flex' : 'none';
       setPelaporType('anonim');
@@ -1007,25 +1067,38 @@
       }
       if(currentUser) localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
       else localStorage.removeItem('kpu_current_user');
-      handleHashRouting();
-      window.addEventListener('hashchange', handleHashRouting);
+
+      registerHistoryHandler();
+      const location = await getWebAppLocation();
+      const initialRoute = normalizeRoute(
+        location?.parameter?.page ||
+        location?.hash ||
+        'lapor'
+      );
+      applyRoute(initialRoute);
     }
 
-    function handleHashRouting() {
-      const hash = window.location.hash;
-      if (hash === '#login') {
+    function applyRoute(route) {
+      const normalized = normalizeRoute(route);
+      CURRENT_ROUTE = normalized;
+
+      if (normalized === 'login') {
         if (currentUser) enterDashboard(currentUser);
         else {
           switchTab('login');
           checkLoginConnection();
         }
-      } else if (hash === '#lacak') {
+      } else if (normalized === 'lacak') {
         switchTab('lacak');
-      } else if (hash === '#lapor' || hash === '') {
+      } else if (normalized === 'lapor') {
         if (currentUser) enterDashboard(currentUser);
         else switchTab('lapor');
-      } else if (hash === '#dashboard' && currentUser) {
-        enterDashboard(currentUser);
+      } else if (normalized === 'dashboard') {
+        if (currentUser) enterDashboard(currentUser);
+        else {
+          switchTab('login');
+          checkLoginConnection();
+        }
       }
     }
 
@@ -1272,7 +1345,7 @@
           document.getElementById('form-pengaduan').reset();
           setPelaporType('anonim');
           document.getElementById('input-ticket-id').value = savedTicket;
-          window.location.hash = '#lacak';
+          navigateTo('lacak');
         } else {
           if(officeWaWindow && !officeWaWindow.closed) officeWaWindow.close();
           showToast(res.message||'Gagal mengirim laporan', 'error');
@@ -1473,7 +1546,7 @@
       document.getElementById('admin-menu').classList.add('hidden');
       document.getElementById('form-pengaduan')?.reset();
       switchTab('login');
-      if (window.location.hash !== '#login') window.location.hash = '#login';
+      navigateTo('login', true);
       showToast('Sesi login telah ditutup.', 'info');
     }
 
