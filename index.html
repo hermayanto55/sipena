@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aplikasi Pengaduan Online KPU Tanjung Jabung Timur</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --kpu-red: #8b0000;
+      --kpu-red-2: #b10012;
+      --kpu-red-3: #d10f22;
+      --kpu-gold: #ffd54f;
+      --ink: #101828;
+    }
+    
+    /* Blogger Clean-up & Override */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important; 
+      height: 100% !important;
+      width: 100% !important;
+      background: #f8fafc !important;
+    }
+
+    .Navbar, #navbar-iframe, .header-outer, .sidebar-container, .main-outer, .footer-outer,
+    #header, #sidebar, #footer, .post-header, .post-footer, .comments, .blog-pager, 
+    .feed-links, .widget, .Attribution, .profile-img, .profile-description,
+    .quickedit, .date-header, .post-meta {
+      display: none !important;
+      height: 0 !important;
+      width: 0 !important;
+      visibility: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      opacity: 0 !important;
+    }
+
+    /* App Container Styling */
+    #kpu-app-container {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999999999 !important; 
+      background: linear-gradient(180deg, #fff 0, #f8fafc 42%, #eef2f7 100%) !important;
+      overflow-y: auto !important; 
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      box-shadow: 0 20px 60px rgba(139, 0, 0, 0.10);
+    }
+    .hero-modern {
+      position: relative;
+      overflow: hidden;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #ffffff 0%, #fff5f5 52%, #ffe8e8 100%);
+      box-shadow: 0 18px 45px rgba(139, 0, 0, 0.10);
+      border: 1px solid rgba(139, 0, 0, 0.08);
+    }
+    .hero-modern:before {
+      content: "";
+      position: absolute;
+      right: -120px;
+      top: -140px;
+      width: 420px;
+      height: 420px;
+      background: radial-gradient(circle, rgba(209, 15, 34, 0.15), transparent 65%);
+      border-radius: 999px;
+    }
+    .hero-modern:after {
+      content: "";
+      position: absolute;
+      left: -90px;
+      bottom: -110px;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle, rgba(255, 213, 79, 0.20), transparent 68%);
+      border-radius: 999px;
+    }
+    .service-card {
+      background: white;
+      border: 1px solid #fee2e2;
+      border-radius: 22px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+      transition: 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .service-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 18px 42px rgba(139, 0, 0, 0.14);
+      border-color: #fecaca;
+    }
+    .service-card:before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0), rgba(255, 213, 79, 0.12));
+      opacity: 0;
+      transition: 0.25s ease;
+    }
+    .service-card:hover:before {
+      opacity: 1;
+    }
+    .icon-circle {
+      width: 54px;
+      height: 54px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #b10012, #8b0000);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 12px 24px rgba(177, 0, 18, 0.26);
+    }
+    .premium-card {
+      border-radius: 24px;
+      border: 1px solid #eef2f7;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+    }
+    .soft-btn {
+      box-shadow: 0 10px 22px rgba(139, 0, 0, 0.18);
+    }
+    .admin-menu-btn {
+      transition: 0.2s ease;
+    }
+    .admin-menu-btn:hover {
+      transform: translateX(4px);
+    }
+    .admin-shell {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+    .admin-sidebar {
+      position: sticky;
+      top: 104px;
+      min-height: calc(100vh - 140px);
+      border-radius: 28px;
+      background: linear-gradient(180deg, #7f0000, #a60012 58%, #630000);
+      color: #fff;
+      box-shadow: 0 24px 55px rgba(127, 0, 0, 0.26);
+      overflow: hidden;
+    }
+    .admin-sidebar:after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      bottom: -80px;
+      width: 210px;
+      height: 210px;
+      border-radius: 999px;
+      background: rgba(255, 213, 79, 0.13);
+    }
+    .admin-side-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.82);
+      position: relative;
+      z-index: 1;
+      text-align: left;
+    }
+    .admin-side-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      transform: translateX(4px);
+    }
+    .admin-side-btn.active {
+      background: #fff;
+      color: #8b0000;
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16);
+    }
+    .admin-side-btn.active:before {
+      content: "";
+      position: absolute;
+      left: -10px;
+      top: 11px;
+      bottom: 11px;
+      width: 5px;
+      border-radius: 999px;
+      background: #ffd54f;
+    }
+    .admin-stat-card {
+      position: relative;
+      overflow: hidden;
+    }
+    .admin-stat-card:after {
+      content: "";
+      position: absolute;
+      right: -18px;
+      bottom: -18px;
+      width: 72px;
+      height: 72px;
+      border-radius: 999px;
+      background: rgba(139, 0, 0, 0.06);
+    }
+    @media(max-width:1024px) {
+      .admin-shell {
+        grid-template-columns: 1fr;
+      }
+      .admin-sidebar {
+        position: relative;
+        top: 0;
+        min-height: auto;
+      }
+      .admin-sidebar nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+    }
+    @media(max-width:768px) {
+      .hero-modern {
+        border-radius: 22px;
+      }
+      .hero-title {
+        font-size: 2rem !important;
+      }
+      .service-card {
+        border-radius: 18px;
+      }
+      .admin-sidebar nav {
+        grid-template-columns: 1fr;
+      }
+    }
+    .auth-field label { display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; }
+    .auth-field input, .auth-field select { width:100%; min-height:44px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:10px; font-size:14px; background:#fff; outline:none; }
+    .auth-field input:focus, .auth-field select:focus { border-color:#991b1b; box-shadow:0 0 0 3px rgba(153,27,27,.10); }
+    .required-mark { color:#dc2626; }
+    .auth-gate { background:linear-gradient(135deg,#fff 0%,#fff7f7 100%); border:1px solid #fecaca; }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; transition:none !important; animation:none !important; } }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <div id="kpu-app-container" class="flex flex-col relative">
+    
+    <!-- PERBAIKAN Z-INDEX: Memasukkan elemen Toast dan Modal ke dalam kpu-app-container agar tidak tersembunyi di balik background -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[100000] flex flex-col gap-3 pointer-events-none"></div>
+    
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4">
+        <div class="inline-flex p-3 bg-red-50 text-red-900 rounded-full text-xl">
+          <i class="fa-solid fa-circle-question"></i>
+        </div>
+        <h3 class="text-base font-bold text-slate-800" id="confirm-title">Konfirmasi</h3>
+        <p class="text-xs text-slate-500" id="confirm-message">Apakah Anda yakin?</p>
+        <div class="flex gap-2 justify-center pt-2">
+          <button id="confirm-cancel" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 font-bold text-xs text-slate-600 rounded-lg">Batal</button>
+          <button id="confirm-ok" class="px-5 py-2 bg-red-900 hover:bg-red-800 font-bold text-xs text-white rounded-lg shadow">Ya, Lanjutkan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="modal-detail" class="hidden fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-100 relative">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
+          <div>
+            <span class="text-xs text-slate-400 font-mono font-semibold" id="modal-title-ticket-id">PROSES PENGADUAN</span>
+            <h3 class="text-base font-bold text-slate-800" id="modal-title-subject">Subjek</h3>
+          </div>
+          <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 font-bold text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4 overflow-y-auto flex-grow text-sm">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Nama Pelapor</span>
+              <span id="modal-nama" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Kontak</span>
+              <span id="modal-kontak" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Kategori</span>
+              <span id="modal-kategori" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Tanggal Kejadian</span>
+              <span id="modal-tanggal-kejadian" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Lokasi Kejadian</span>
+              <span id="modal-lokasi-kejadian" class="font-bold text-slate-700">-</span>
+            </div>
+            <div>
+              <span class="block text-[11px] text-slate-400 font-semibold uppercase">Bukti Pendukung</span>
+              <span id="modal-bukti" class="font-bold text-slate-700">-</span>
+            </div>
+          </div>
+          <div>
+            <span class="block text-[11px] text-slate-400 font-semibold uppercase mb-1">Deskripsi Aduan</span>
+            <div id="modal-deskripsi" class="bg-slate-50 border border-slate-100 p-3 rounded-lg leading-relaxed whitespace-pre-line text-slate-700"></div>
+          </div>
+          
+          <form onsubmit="saveStatus(event)" class="space-y-4 border-t border-slate-100 pt-4">
+            <input type="hidden" id="modal-ticket-id">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Status Pengaduan</label>
+                <select id="modal-status" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
+                  <option>Pending</option>
+                  <option>Diproses</option>
+                  <option>Selesai</option>
+                  <option>Ditolak</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Tanggapan Resmi Admin</label>
+              <textarea id="modal-tanggapan" required rows="4" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Tuliskan respon formal untuk ditayangkan secara publik..."></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+              <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 font-bold text-xs text-slate-600 rounded-lg">Batal</button>
+              <button class="px-5 py-2 bg-red-900 hover:bg-red-800 font-bold text-xs text-white rounded-lg shadow flex items-center gap-1">
+                <i class="fa-solid fa-floppy-disk"></i> Simpan Respon
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-red-950 via-red-900 to-red-700 text-white shadow-xl sticky top-0 z-50 border-b border-white/10">
+      <div class="max-w-full mx-auto px-4 sm:px-8 lg:px-12">
+        <div class="flex items-center justify-between h-20">
+          <div class="flex items-center space-x-3">
+            <div class="bg-white p-1 rounded-full shadow-2xl flex items-center justify-center w-12 h-12 ring-4 ring-white/15 overflow-hidden">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Logo Instansi" data-app-logo class="w-full h-full object-contain p-0.5" />
+            </div>
+            <div>
+              <h1 class="text-lg font-bold tracking-wide leading-tight">PENGADUAN ONLINE</h1>
+              <p class="text-xs text-yellow-400 font-medium tracking-wider">KPU KABUPATEN TANJUNG JABUNG TIMUR</p>
+            </div>
+          </div>
+          <nav class="hidden md:flex space-x-2">
+            <button onclick="window.location.hash='#lapor'" id="nav-lapor" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-white bg-red-850"><i class="fa-solid fa-pen-to-square"></i> Buat Laporan</button>
+            <button onclick="window.location.hash='#lacak'" id="nav-lacak" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-magnifying-glass"></i> Lacak Aduan</button>
+            <button onclick="window.location.hash='#dashboard'" id="nav-dashboard" class="hidden nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 text-red-100 hover:bg-red-800 hover:text-white"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
+            <button onclick="logout()" id="nav-logout" class="hidden px-4 py-2 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 transition text-white flex items-center gap-2"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+          </nav>
+          <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-yellow-400">
+            <i id="menu-icon" class="fa-solid fa-bars text-2xl"></i>
+          </button>
+        </div>
+      </div>
+      <!-- Mobile Menu -->
+      <div id="mobile-menu" class="hidden md:hidden bg-red-950 px-4 pt-2 pb-4 space-y-1 shadow-inner">
+        <button onclick="window.location.hash='#lapor';toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
+        <button onclick="window.location.hash='#lacak';toggleMobileMenu()" class="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
+        <button onclick="window.location.hash='#dashboard';toggleMobileMenu()" id="nav-dashboard-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-red-900"><i class="fa-solid fa-chart-line mr-2"></i>Dashboard</button>
+        <button onclick="logout();toggleMobileMenu()" id="nav-logout-mobile" class="hidden w-full text-left px-3 py-2 rounded-md text-base font-medium bg-amber-600 text-white hover:bg-amber-700"><i class="fa-solid fa-right-from-bracket mr-2"></i>Logout</button>
+      </div>
+    </header>
+
+    <!-- Preview Banner -->
+    <div id="preview-banner" class="hidden bg-yellow-500 text-slate-950 font-semibold px-4 py-2 flex items-center justify-between text-xs sm:text-sm shadow-inner">
+      <span class="flex items-center gap-2">
+        <i class="fa-solid fa-triangle-exclamation animate-pulse"></i>
+        <span><strong>Mode Preview Aktif:</strong> Gunakan akhiran URL <b class="font-mono text-red-900 font-extrabold text-sm">#login</b> untuk mengakses halaman login Admin/Petugas.</span>
+      </span>
+      <div class="hidden sm:block text-xs bg-slate-900 text-white px-2 py-1 rounded">Admin: admin | Pass: admin2026</div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-full w-full mx-auto px-4 sm:px-8 lg:px-12 py-8">
+      
+      <!-- TAB 1: LAPOR -->
+      <section id="tab-lapor" class="content-tab space-y-8">
+        <div class="hero-modern px-6 sm:px-10 py-9 sm:py-12">
+          <div class="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div>
+              <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 text-red-800 border border-red-100 text-xs font-extrabold mb-4">
+                <i class="fa-solid fa-shield-heart"></i> Layanan Pengaduan Terpadu KPU
+              </div>
+              <h2 class="hero-title text-3xl sm:text-5xl font-extrabold text-slate-950 leading-tight">Sampaikan Aduan Anda <span class="text-red-800 block">Dengan Mudah dan Cepat</span></h2>
+              <p class="mt-4 text-sm sm:text-base text-slate-600 max-w-xl leading-relaxed">Sistem Pengaduan Masyarakat KPU Kabupaten Tanjung Jabung Timur untuk pelayanan publik yang lebih responsif, transparan, dan terdokumentasi.</p>
+              <div class="mt-7 flex flex-wrap gap-3">
+                <button onclick="document.getElementById('kategori').scrollIntoView({behavior:'smooth',block:'center'})" class="soft-btn px-5 py-3 rounded-2xl bg-red-800 hover:bg-red-900 text-white text-sm font-extrabold"><i class="fa-solid fa-pen-to-square mr-2"></i>Buat Laporan</button>
+                <button onclick="window.location.hash='#lacak'" class="px-5 py-3 rounded-2xl bg-white hover:bg-red-50 text-red-900 text-sm font-extrabold border border-red-100"><i class="fa-solid fa-magnifying-glass mr-2"></i>Lacak Aduan</button>
+              </div>
+              
+              <div class="mt-7 grid grid-cols-2 gap-4 max-w-lg">
+                <div class="glass-card rounded-2xl p-4 flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-2xl bg-red-100 text-red-800 flex items-center justify-center text-xl"><i class="fa-solid fa-clipboard-list"></i></div>
+                  <div>
+                    <div id="public-stat-total" class="text-2xl font-extrabold text-red-800">0</div>
+                    <div class="text-xs font-bold text-slate-500">Total Aduan</div>
+                  </div>
+                </div>
+                <div class="glass-card rounded-2xl p-4 flex items-center gap-3">
+                  <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center text-xl"><i class="fa-solid fa-check"></i></div>
+                  <div>
+                    <div id="public-stat-selesai" class="text-2xl font-extrabold text-green-700">0</div>
+                    <div class="text-xs font-bold text-slate-500">Selesai</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="relative min-h-[260px] hidden lg:flex items-center justify-center">
+              <div class="absolute w-[420px] h-[260px] rounded-[38px] bg-white shadow-2xl border border-red-100 rotate-[-2deg]"></div>
+              <div class="relative w-[390px] rounded-[28px] bg-slate-950 shadow-2xl p-4">
+                <div class="bg-white rounded-2xl p-5 space-y-4">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 bg-red-200 rounded-full"></span>
+                    <span class="w-3 h-3 bg-yellow-200 rounded-full"></span>
+                    <span class="w-3 h-3 bg-green-200 rounded-full"></span>
+                  </div>
+                  <div class="space-y-3">
+                    <div class="h-3 rounded bg-slate-100 w-4/5"></div>
+                    <div class="h-3 rounded bg-slate-100 w-full"></div>
+                    <div class="h-3 rounded bg-slate-100 w-3/4"></div>
+                  </div>
+                  <div class="grid grid-cols-3 gap-3 pt-2">
+                    <div class="h-20 rounded-2xl bg-red-50 flex items-center justify-center text-red-800 text-3xl"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                    <div class="h-20 rounded-2xl bg-yellow-50 flex items-center justify-center text-yellow-600 text-3xl"><i class="fa-solid fa-envelope"></i></div>
+                    <div class="h-20 rounded-2xl bg-green-50 flex items-center justify-center text-green-600 text-3xl"><i class="fa-solid fa-circle-check"></i></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div class="lg:col-span-1 space-y-6">
+            <div class="bg-gradient-to-br from-red-900 via-red-800 to-red-950 text-white rounded-[28px] p-6 shadow-2xl relative overflow-hidden">
+              <div class="absolute -right-10 -bottom-10 opacity-10 text-9xl"><i class="fa-solid fa-gavel"></i></div>
+              <h2 id="public-service-title" class="text-2xl font-bold mb-3">Layanan Pengaduan Masyarakat</h2>
+              <p id="public-service-desc" class="text-sm text-red-100 leading-relaxed mb-6">Sampaikan aduan, kendala, atau masukan terkait pelayanan, administrasi, logistik, and penyelenggaraan Pemilu di wilayah Kabupaten Tanjung Jabung Timur.</p>
+              <div class="space-y-4">
+                <div class="flex gap-3 items-start">
+                  <div class="bg-yellow-400 text-red-950 rounded-full p-2 w-8 h-8 flex items-center justify-center font-bold shrink-0 text-sm">1</div>
+                  <p class="text-xs text-red-100 mt-1">Isi formulir pengaduan dengan lengkap.</p>
+                </div>
+                <div class="flex gap-3 items-start">
+                  <div class="bg-yellow-400 text-red-950 rounded-full p-2 w-8 h-8 flex items-center justify-center font-bold shrink-0 text-sm">2</div>
+                  <p class="text-xs text-red-100 mt-1">Simpan nomor tiket rahasia untuk memantau status aduan.</p>
+                </div>
+                <div class="flex gap-3 items-start">
+                  <div class="bg-yellow-400 text-red-950 rounded-full p-2 w-8 h-8 flex items-center justify-center font-bold shrink-0 text-sm">3</div>
+                  <p class="text-xs text-red-100 mt-1">Petugas kami akan merespons langsung laporan Anda.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 shadow-md border border-slate-100 space-y-4">
+              <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-red-800"></i> Informasi Kontak KPU
+              </h3>
+              <ul class="space-y-4 text-sm text-slate-600">
+                <li class="flex items-start gap-3">
+                  <i class="fa-solid fa-map-location-dot text-slate-400 w-5 mt-1 shrink-0"></i>
+                  <span id="contact-address">-</span>
+                </li>
+                <li class="flex items-center gap-3">
+                  <i class="fa-brands fa-whatsapp text-green-500 w-5 text-lg shrink-0"></i>
+                  <a id="contact-phone" class="font-semibold text-red-800 hover:underline" href="#" target="_blank" rel="noopener">-</a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="lg:col-span-2">
+            <div class="premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4">
+                <h2 class="text-lg font-bold text-slate-800">Formulir Pengaduan Baru</h2>
+                <p class="text-xs text-slate-500">Isi laporan dengan jujur dan lengkap. Anda dapat memilih opsi Anonim.</p>
+              </div>
+              <form id="form-pengaduan" onsubmit="handleLapor(event)" class="p-6 space-y-6">
+                <div class="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
+                  <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <label class="text-sm font-bold text-slate-700">Jenis Identitas Pelapor</label>
+                    <div class="flex gap-2">
+                      <button type="button" onclick="setPelaporType('anonim')" id="pelapor-anonim" class="px-3 py-1.5 text-xs font-semibold rounded-lg border">
+                        <i class="fa-solid fa-user-secret mr-1"></i> Anonim (Rahasia)
+                      </button>
+                      <button type="button" onclick="setPelaporType('biasa')" id="pelapor-biasa" class="px-3 py-1.5 text-xs font-semibold rounded-lg border">
+                        <i class="fa-solid fa-user mr-1"></i> Dengan Identitas
+                      </button>
+                    </div>
+                  </div>
+                  <div id="wrapper-identitas" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1">Nama Lengkap</label>
+                      <input id="nama_pelapor" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Nama Anda">
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold text-slate-600 mb-1">No. WA Aktif Pelapor</label>
+                      <input id="kontak_pelapor" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Contoh: 08123456789">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Kategori Aduan <span class="text-red-500">*</span></label>
+                    <select id="kategori" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800 bg-white"></select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Subjek Singkat <span class="text-red-500">*</span></label>
+                    <input id="subjek" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Contoh: Kerusakan logistik kotak suara">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Tanggal Kejadian <span class="text-red-500">*</span></label>
+                    <input type="date" id="tanggal_kejadian" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800 bg-white">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Lokasi Kejadian <span class="text-red-500">*</span></label>
+                    <input id="lokasi_kejadian" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Contoh: Desa Rantau Indah, Kecamatan Geragai">
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Deskripsi Lengkap Kejadian <span class="text-red-500">*</span></label>
+                  <textarea id="deskripsi" required rows="5" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Tuliskan kronologi dan detail kejadian lainnya..."></textarea>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Link Bukti Pendukung</label>
+                  <p class="text-[11px] text-slate-400 mb-1">Unggah foto/video bukti ke Google Drive, Dropbox, atau Cloud Storage lain lalu tempelkan linknya di bawah ini.</p>
+                  <input type="url" id="bukti_link" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="https://drive.google.com/...">
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex justify-end">
+                  <button id="btn-submit-lapor" class="px-6 py-3 bg-red-900 hover:bg-red-800 text-white font-semibold text-sm rounded-xl shadow-md flex items-center justify-center gap-2 shrink-0">
+                    <i class="fa-solid fa-paper-plane"></i> Kirim Laporan Pengaduan
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: LACAK -->
+      <section id="tab-lacak" class="content-tab hidden">
+        <div class="max-w-2xl mx-auto space-y-8">
+          <div class="bg-white rounded-2xl p-6 shadow-md border border-slate-100 text-center space-y-4">
+            <div class="inline-flex p-3 bg-red-50 text-red-900 rounded-full text-2xl">
+              <i class="fa-solid fa-fingerprint animate-pulse"></i>
+            </div>
+            <h2 class="text-xl font-bold text-slate-800">Lacak Status Pengaduan Anda</h2>
+            <p class="text-sm text-slate-500">Masukkan kode tiket unik untuk melihat progres tindak lanjut dari petugas KPU.</p>
+            <div class="flex flex-col sm:flex-row gap-2 max-w-lg mx-auto pt-2">
+              <input id="input-ticket-id" class="flex-grow px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono tracking-wider focus:outline-none focus:border-red-800" placeholder="KPU-TJT-2026-XXXX">
+              <button onclick="handleLacak()" id="btn-lacak" class="px-6 py-3 bg-red-900 hover:bg-red-800 text-white font-semibold text-sm rounded-xl shadow-md shrink-0">
+                <i class="fa-solid fa-magnifying-glass mr-2"></i>Cari Tiket
+              </button>
+            </div>
+          </div>
+          <div id="tracking-result" class="hidden premium-card overflow-hidden"></div>
+        </div>
+      </section>
+
+      <!-- TAB 3: LOGIN -->
+      <section id="tab-login" class="content-tab hidden">
+        <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in">
+          <div class="bg-gradient-to-r from-red-900 to-red-950 text-white px-6 py-8 text-center space-y-2">
+            <div class="inline-flex p-3 bg-white/10 rounded-full text-2xl"><i class="fa-solid fa-right-to-bracket text-yellow-400"></i></div>
+            <h2 class="text-xl font-extrabold">Login Admin/Petugas</h2>
+            <p class="text-sm text-red-100">Halaman ini khusus Admin dan Petugas SIPENA.</p>
+          </div>
+          <form id="form-login" onsubmit="handleLogin(event)" class="p-6 space-y-4">
+            <div class="auth-field"><label for="username">Username <span class="required-mark">*</span></label><input id="username" autocomplete="username" required placeholder="Masukkan username admin/petugas"></div>
+            <div class="auth-field"><label for="password">Password <span class="required-mark">*</span></label><div class="relative"><input id="password" type="password" autocomplete="current-password" required placeholder="Masukkan password"><button type="button" onclick="togglePassword('password',this)" aria-label="Tampilkan password" class="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 text-slate-500"><i class="fa-solid fa-eye"></i></button></div></div>
+            <button id="btn-submit-login" class="w-full min-h-[44px] py-3 bg-red-900 hover:bg-red-800 text-white font-bold text-sm rounded-xl shadow-md"><i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk</button>
+          </form>
+        </div>
+      </section>
+<!-- TAB 4: DASHBOARD ADMIN -->
+      <section id="tab-dashboard" class="content-tab hidden space-y-6">
+        <div class="admin-shell">
+          <!-- Sidebar -->
+          <aside id="admin-menu" class="hidden admin-sidebar p-5">
+            <div class="relative z-10 flex items-center gap-3 pb-5 mb-4 border-b border-white/15">
+              <div class="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg p-1.5 overflow-hidden">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Logo Instansi" data-app-logo class="w-full h-full object-contain" />
+              </div>
+              <div>
+                <h3 class="text-sm font-extrabold leading-tight">PENGADUAN</h3>
+                <p class="text-[10px] text-yellow-300 font-bold uppercase tracking-wide">Panel Petugas KPU</p>
+              </div>
+            </div>
+            <div class="relative z-10 mb-5 p-4 rounded-2xl bg-white/10 border border-white/10">
+              <p class="text-[11px] text-red-100">Masuk sebagai</p>
+              <p id="admin-display-name-sidebar" class="text-sm font-extrabold text-white leading-tight mt-1">Petugas</p>
+              <span class="inline-flex items-center gap-1 mt-2 text-[10px] font-bold px-2 py-1 rounded-full bg-emerald-400/20 text-emerald-100"><i class="fa-solid fa-circle text-[7px]"></i> Online</span>
+            </div>
+            <nav class="relative z-10 space-y-2">
+              <button onclick="switchAdminView('laporan')" id="admin-menu-laporan" class="admin-side-btn"><i class="fa-solid fa-table-list w-5 text-center"></i> Daftar Aduan</button>
+              <button onclick="switchAdminView('kontak')" id="admin-menu-kontak" class="admin-side-btn admin-only"><i class="fa-solid fa-address-book w-5 text-center"></i> Pengaturan Kontak</button>
+              <button onclick="switchAdminView('kategori')" id="admin-menu-kategori" class="admin-side-btn admin-only"><i class="fa-solid fa-tags w-5 text-center"></i> Kategori Aduan</button>
+              <button onclick="switchAdminView('publik')" id="admin-menu-publik" class="admin-side-btn admin-only"><i class="fa-solid fa-layer-group w-5 text-center"></i> Tampilan Publik</button>
+              <button onclick="switchAdminView('akun')" id="admin-menu-akun" class="admin-side-btn admin-only"><i class="fa-solid fa-users-gear w-5 text-center"></i> Akun Pengguna</button>
+              <button onclick="logout()" class="admin-side-btn"><i class="fa-solid fa-right-from-bracket w-5 text-center"></i> Logout</button>
+            </nav>
+          </aside>
+
+          <!-- Main Dashboard View -->
+          <div class="min-w-0 space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-red-950 via-red-900 to-red-700 text-white p-6 rounded-[28px] shadow-2xl border border-white/10">
+              <div>
+                <h2 class="text-xl font-extrabold text-white">Dashboard Petugas Pengaduan</h2>
+                <p class="text-sm text-red-100">Selamat datang, <span id="admin-display-name" class="font-bold text-yellow-300">Petugas</span>. Kelola aduan publik di sini.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="role-badge" class="px-3 py-1 bg-purple-100 text-purple-900 font-semibold text-xs rounded-full">-</span>
+                <button onclick="refreshAll()" class="px-4 py-2 bg-white hover:bg-slate-100 text-red-900 text-xs font-bold rounded-xl shadow-sm transition"><i class="fa-solid fa-rotate mr-1"></i>Muat Ulang</button>
+              </div>
+            </div>
+
+            <!-- View 1: Laporan -->
+            <div id="admin-view-laporan" class="admin-view space-y-6">
+              <div class="grid grid-cols-2 xl:grid-cols-5 gap-4">
+                <div class="premium-card admin-stat-card p-4"><span class="text-xs text-slate-400 font-bold block">Total Aduan</span><span id="stat-total" class="text-3xl font-extrabold text-slate-800 py-2 block">0</span><small class="text-[11px] text-slate-400">Keseluruhan</small></div>
+                <div class="premium-card admin-stat-card p-4"><span class="text-xs text-amber-600 font-bold block">Pending</span><span id="stat-pending" class="text-3xl font-extrabold text-amber-600 py-2 block">0</span><small class="text-[11px] text-slate-400">Menunggu</small></div>
+                <div class="premium-card admin-stat-card p-4"><span class="text-xs text-blue-600 font-bold block">Diproses</span><span id="stat-diproses" class="text-3xl font-extrabold text-blue-600 py-2 block">0</span><small class="text-[11px] text-slate-400">Ditindaklanjuti</small></div>
+                <div class="premium-card admin-stat-card p-4"><span class="text-xs text-green-600 font-bold block">Selesai</span><span id="stat-selesai" class="text-3xl font-extrabold text-green-600 py-2 block">0</span><small class="text-[11px] text-slate-400">Selesai Ditangani</small></div>
+                <div class="premium-card admin-stat-card p-4 col-span-2 xl:col-span-1"><span class="text-xs text-rose-600 font-bold block">Ditolak</span><span id="stat-ditolak" class="text-3xl font-extrabold text-rose-600 py-2 block">0</span><small class="text-[11px] text-slate-400">Tidak Valid</small></div>
+              </div>
+
+              <div class="premium-card overflow-hidden">
+                <div class="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <h3 class="text-base font-bold text-slate-800"><i class="fa-solid fa-table-list text-red-900 mr-2"></i>Daftar Seluruh Aduan</h3>
+                  <div class="flex flex-wrap gap-2">
+                    <input id="search-report" oninput="renderReportTable()" class="px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-red-800" placeholder="Cari tiket/pelapor/subjek">
+                    <select id="filter-status" onchange="renderReportTable()" class="px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:border-red-800">
+                      <option value="semua">Semua Status</option>
+                      <option>Pending</option>
+                      <option>Diproses</option>
+                      <option>Selesai</option>
+                      <option>Ditolak</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse">
+                    <thead>
+                      <tr class="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                        <th class="py-3 px-6">ID Tiket / Tgl</th>
+                        <th class="py-3 px-6">Pelapor</th>
+                        <th class="py-3 px-6">No. WA Aktif Pelapor</th>
+                        <th class="py-3 px-6">Kategori & Subjek</th>
+                        <th class="py-3 px-6">Status</th>
+                        <th class="py-3 px-6 text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-table-body" class="divide-y divide-slate-100 text-sm text-slate-600"></tbody>
+                  </table>
+                  <div id="no-report" class="hidden p-8 text-center text-slate-400">
+                    <i class="fa-solid fa-folder-open text-4xl mb-2 block"></i>
+                    Belum ada data aduan masyarakat.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- View 2: Pengaturan Kontak -->
+            <div id="admin-view-kontak" class="admin-view hidden premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4">
+                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-address-book text-red-900 mr-2"></i>Pengaturan Informasi Kontak & WhatsApp</h3>
+                <p class="text-xs text-slate-500">Sesuaikan data kontak yang dapat dihubungi oleh masyarakat.</p>
+              </div>
+              <form onsubmit="saveContactSettings(event)" class="p-6 space-y-4">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <label class="text-xs font-bold text-slate-700 block mb-3">Logo Aplikasi</label>
+                  <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div class="w-24 h-24 rounded-2xl bg-white border border-slate-200 p-2 flex items-center justify-center shrink-0">
+                      <img id="setting-logo-preview" data-app-logo src="https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg" alt="Pratinjau logo" class="w-full h-full object-contain">
+                    </div>
+                    <div class="flex-1">
+                      <input id="setting-logo-file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="handleLogoUpload(event)" class="block w-full text-sm text-slate-600 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-red-100 file:text-red-900 hover:file:bg-red-200 cursor-pointer">
+                      <p class="mt-2 text-[11px] text-slate-500">Format PNG, JPG, WEBP, atau SVG. Gambar otomatis diperkecil agar ringan.</p>
+                      <button id="btn-remove-logo" type="button" onclick="removeUploadedLogo()" class="hidden mt-3 px-3 py-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs font-bold"><i class="fa-solid fa-trash mr-1"></i>Hapus Logo Upload</button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label class="text-xs font-bold text-slate-600 block mb-1">Alamat Kantor KPU</label>
+                  <textarea id="setting-address" required rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800"></textarea>
+                </div>
+                <div>
+                  <label class="text-xs font-bold text-slate-600 block mb-1">Nomor WhatsApp Kantor</label>
+                  <input id="setting-phone" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Contoh: 0822-9241-3678">
+                </div>
+
+                <div class="border-t border-slate-100 pt-4 mt-2">
+                  <h4 class="text-sm font-bold text-slate-800 mb-2"><i class="fa-brands fa-whatsapp text-green-600 mr-1"></i>Notifikasi Instan WhatsApp (Fonnte)</h4>
+                  <p class="text-xs text-slate-500 mb-4">Secara otomatis mengirim notifikasi ke grup/nomor admin ketika ada laporan baru masuk.</p>
+                  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label class="text-xs font-bold text-slate-600 block mb-1">Status Pengiriman</label>
+                      <select id="setting-wa-enabled" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:border-red-800">
+                        <option value="false">Tidak Aktif</option>
+                        <option value="true">Aktif</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="text-xs font-bold text-slate-600 block mb-1">Token Fonnte API</label>
+                      <input id="setting-wa-token" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Token API Fonnte">
+                    </div>
+                    <div>
+                      <label class="text-xs font-bold text-slate-600 block mb-1">Nomor/ID Group Tujuan</label>
+                      <input id="setting-wa-target" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Gunakan format 628xxxx">
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="flex justify-end pt-4 border-t border-slate-100">
+                  <button id="btn-save-kontak" class="px-5 py-2.5 bg-red-900 hover:bg-red-800 text-white rounded-xl text-xs font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Simpan Kontak & WA
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- View 3: Kategori Aduan -->
+            <div id="admin-view-kategori" class="admin-view hidden premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4">
+                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-tags text-red-900 mr-2"></i>Manajemen Kategori Aduan</h3>
+                <p class="text-xs text-slate-500">Atur kategori yang tersedia bagi pelapor.</p>
+              </div>
+              <form onsubmit="saveCategory(event)" class="p-6 grid grid-cols-1 md:grid-cols-5 gap-3 border-b border-slate-100">
+                <input id="category-name" class="md:col-span-4 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Tulis kategori aduan baru">
+                <button id="btn-save-category" class="px-4 py-2 bg-red-900 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                  <i class="fa-solid fa-plus"></i> Simpan Kategori
+                </button>
+              </form>
+              <div id="category-list" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+            </div>
+
+            <!-- View 4: Tampilan Publik -->
+            <div id="admin-view-publik" class="admin-view hidden premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4">
+                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-layer-group text-red-900 mr-2"></i>Pengaturan Halaman Utama</h3>
+                <p class="text-xs text-slate-500">Sesuaikan judul dan deskripsi layanan pada beranda publik.</p>
+              </div>
+              <form onsubmit="savePublicSettings(event)" class="p-6 space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="text-xs font-bold text-slate-600 block mb-1">Judul Layanan Beranda</label>
+                    <input id="public-setting-title" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Judul Banner">
+                  </div>
+                  <div>
+                    <label class="text-xs font-bold text-slate-600 block mb-1">Deskripsi Layanan Beranda</label>
+                    <input id="public-setting-desc" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Deskripsi Banner">
+                  </div>
+                </div>
+                <div class="flex justify-end border-t border-slate-100 pt-5">
+                  <button class="px-5 py-2.5 bg-red-900 hover:bg-red-800 text-white rounded-xl text-xs font-bold flex items-center gap-1">
+                    <i class="fa-solid fa-floppy-disk"></i> Simpan Tampilan Publik
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- View 5: Akun Pengguna -->
+            <div id="admin-view-akun" class="admin-view hidden premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4">
+                <h3 class="font-bold text-slate-800"><i class="fa-solid fa-users-gear text-red-900 mr-2"></i>Manajemen Akun Petugas</h3>
+                <p class="text-xs text-slate-500">Hanya Administrator yang berwenang menambahkan atau mengubah akun petugas.</p>
+              </div>
+              <form onsubmit="saveUser(event)" class="p-6 grid grid-cols-1 md:grid-cols-4 gap-3 border-b border-slate-100">
+                <input id="user-username" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Username" required>
+                <input id="user-password" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Password" required>
+                <input id="user-name" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Nama Lengkap" required>
+                <select id="user-role" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800 bg-white">
+                  <option>Admin</option>
+                  <option>Petugas</option>
+                </select>
+                <button id="btn-save-user" class="md:col-span-4 px-4 py-2 bg-red-900 hover:bg-red-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
+                  <i class="fa-solid fa-user-plus"></i> Tambah / Simpan Akun
+                </button>
+              </form>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                  <thead>
+                    <tr class="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                      <th class="py-3 px-6">Username</th>
+                      <th class="py-3 px-6">Nama</th>
+                      <th class="py-3 px-6">Hak Akses</th>
+                      <th class="py-3 px-6 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="user-table" class="divide-y divide-slate-100 text-sm"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- View 6: Data Pelapor Terdaftar -->
+            <div id="admin-view-pelapor" class="admin-view hidden premium-card overflow-hidden">
+              <div class="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 class="font-bold text-slate-800"><i class="fa-solid fa-address-card text-red-900 mr-2"></i>Data Pelapor Terdaftar</h3>
+                  <p class="text-xs text-slate-500">Daftar masyarakat yang sudah membuat akun. Password tidak ditampilkan.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="citizen-count" class="px-3 py-1.5 rounded-lg bg-red-100 text-red-900 text-xs font-extrabold">0 akun</span>
+                  <button type="button" onclick="renderCitizenTable()" class="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>Muat Ulang</button>
+                </div>
+              </div>
+              <div class="p-4 border-b border-slate-100">
+                <input id="search-citizen" oninput="renderCitizenTable()" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-red-800" placeholder="Cari nama, NIK, username, email, telepon, atau tempat tinggal">
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[1250px] text-left border-collapse">
+                  <thead>
+                    <tr class="bg-slate-100 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                      <th class="py-3 px-4">Identitas</th>
+                      <th class="py-3 px-4">Akun & Kontak</th>
+                      <th class="py-3 px-4">Domisili & Lahir</th>
+                      <th class="py-3 px-4">Profil</th>
+                      <th class="py-3 px-4">Pihak Konfirmasi</th>
+                      <th class="py-3 px-4">Tanggal Daftar</th>
+                      <th class="py-3 px-4 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="citizen-table" class="divide-y divide-slate-100 text-sm"></tbody>
+                </table>
+                <div id="no-citizen" class="hidden p-10 text-center text-slate-400"><i class="fa-solid fa-users-slash text-4xl mb-3 block"></i>Belum ada akun pelapor yang terdaftar.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 mt-auto">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <p>&copy; 2026 Komisi Pemilihan Umum Kabupaten Tanjung Jabung Timur. Seluruh Hak Cipta Dilindungi.</p>
+        <p class="text-[10px] text-slate-500">Sistem Pelayanan Pengaduan Online Pemilu Terintegrasi.</p>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    /* KONFIGURASI APPS SCRIPT */
+    const IS_PREVIEW = false; 
+    // Ganti dengan URL deployment Web App dari backend Code.gs.
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbzcRIN_st6STPgZfAvRtlhVmvqGSLzkVSCLaSzNsazD2dajRszx3zyKd-MrolgdoYzS/exec';
+    const DEFAULT_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/4/46/KPU_Logo.svg';
+    const LOGO_STORAGE_KEY = 'kpu_uploaded_logo';
+    let pendingLogoData = localStorage.getItem(LOGO_STORAGE_KEY) || '';
+
+    let currentUser = null;
+    let currentReports = [];
+    let currentUsers = [];
+    let currentCategories = [];
+    let currentSettings = {};
+    let pelaporType = 'anonim';
+    let editingCategoryName = '';
+    let citizenAccounts = [];
+
+
+    const dummyReports = [
+      {ticket_id:'KPU-TJT-2026-0001',tanggal_masuk:'2026-05-10T09:12:00.000Z',kategori:'Logistik Pemilu',subjek:'Kerusakan Surat Suara di PPS Rantau Indah',deskripsi:'Ditemukan 2 box surat suara dalam keadaan basah karena atap sekretariat PPS bocor saat hujan deras malam hari.',nama_pelapor:'Muhammad Yusuf',kontak_pelapor:'081274561234',bukti_link:'https://drive.google.com',status:'Selesai',tanggapan_admin:'Tim KPU Kabupaten Tanjung Jabung Timur telah mengirimkan box pengganti dan mengamankan surat suara yang tersisa ke lokasi kering.',tanggal_update:'2026-05-11T14:30:00.000Z'},
+      {ticket_id:'KPU-TJT-2026-0002',tanggal_masuk:'2026-05-14T11:45:00.000Z',kategori:'Kode Etik Ad-hoc',subjek:'Indikasi Ketidaknetralan Anggota KPPS',deskripsi:'Dugaan ketidaknetralan salah satu anggota KPPS di TPS 03 Desa Pandan Lagan.',nama_pelapor:'Rahasia / Anonim',kontak_pelapor:'-',bukti_link:'',status:'Diproses',tanggapan_admin:'Laporan sedang diteruskan ke PPK Geragai untuk klarifikasi dan verifikasi lapangan.',tanggal_update:'2026-05-15T08:00:00.000Z'},
+      {ticket_id:'KPU-TJT-2026-0003',tanggal_masuk:'2026-05-17T15:20:00.000Z',kategori:'Administrasi',subjek:'Keterlambatan Pemasangan DPS',deskripsi:'Papan pengumuman DPS di kantor Desa Lambur Luar belum terpasang sampai batas waktu.',nama_pelapor:'Hendra Wijaya',kontak_pelapor:'082390887112',bukti_link:'https://drive.google.com',status:'Pending',tanggapan_admin:'',tanggal_update:''}
+    ];
+    const dummyUsers = [
+      {username:'admin',password:'admin2026',nama_petugas:'Administrator KPU Tanjung Jabung Timur',role:'Admin'},
+      {username:'peserta',password:'admin2026',nama_petugas:'Staf Pelaksana KPU',role:'Petugas'}
+    ];
+    const dummyCategories = [
+      'Logistik Pemilu',
+      'Kode Etik Penyelenggara Ad-hoc',
+      'Pelayanan Informasi Publik',
+      'Administrasi Kepemiluan',
+      'Data Pemilih / DPT',
+      'Tahapan Pemilu / Pilkada',
+      'Teknis TPS / Pemungutan Suara',
+      'Rekapitulasi Suara',
+      'Sosialisasi dan Pendidikan Pemilih',
+      'Sarana Prasarana Kantor',
+      'Pengaduan Netralitas',
+      'Lainnya / Umum'
+    ];
+    const dummySettings = {
+      contact_address:'Jl. Diponegoro No. 1, Muara Sabak, Kab. Tanjung Jabung Timur',
+      contact_email:'kab_tanjungjabungtimur@kpu.go.id',
+      contact_phone:'0822-9241-3678',
+      wa_enabled:'false',
+      wa_token:'',
+      wa_target:'',
+      public_service_title:'Layanan Pengaduan Masyarakat',
+      public_service_desc:'Sampaikan aduan, kendala, atau masukan terkait pelayanan, administrasi, logistik, dan penyelenggaraan Pemilu di wilayah Kabupaten Tanjung Jabung Timur.',
+      public_cards_json:''
+    };
+
+    document.addEventListener('DOMContentLoaded', bootApp);
+
+    async function bootApp() {
+      document.getElementById('preview-banner').style.display = IS_PREVIEW ? 'flex' : 'none';
+      applyUploadedLogo(pendingLogoData || DEFAULT_LOGO_URL);
+      setPelaporType('anonim');
+      await refreshPublicData();
+      
+      apiGet('getAllReports').then(res => {
+        if(res.status === 'success'){
+          const arr = res.data || [];
+          const t = document.getElementById('public-stat-total');
+          const d = document.getElementById('public-stat-selesai');
+          if(t) t.innerText = arr.length; 
+          if(d) d.innerText = arr.filter(r => String(r.status || '').toLowerCase() === 'selesai').length;
+        }
+      }).catch(() => {});
+
+      const session = localStorage.getItem('kpu_current_user');
+      if (session) {
+        try {
+          currentUser = JSON.parse(session);
+        } catch (e) {
+          currentUser = null;
+        }
+      }
+      handleHashRouting();
+      window.addEventListener('hashchange', handleHashRouting);
+    }
+
+    function handleHashRouting() {
+      const hash = window.location.hash || '#lapor';
+      const isStaff = currentUser && ['admin','petugas'].includes(String(currentUser.role||'').toLowerCase());
+      if (hash === '#login') {
+        if (isStaff) enterDashboard(currentUser); else switchTab('login');
+      } else if (hash === '#lacak') {
+        switchTab('lacak');
+      } else if (hash === '#lapor') {
+        switchTab('lapor');
+        updateComplaintAccess();
+      } else if (hash === '#dashboard' && isStaff) {
+        enterDashboard(currentUser);
+      } else {
+        window.location.hash = '#lapor';
+      }
+    }
+
+    async function apiGet(action, params={}) {
+      if(IS_PREVIEW) return previewGet(action, params);
+      const q = new URLSearchParams({action, ...params}).toString();
+      const res = await fetch(`${GAS_URL}?${q}`);
+      return await res.json();
+    }
+
+    async function apiPost(payload) {
+      if(IS_PREVIEW) return previewPost(payload);
+      const res = await fetch(GAS_URL, {method:'POST', body:JSON.stringify(payload)});
+      return await res.json();
+    }
+
+    async function refreshPublicData() {
+      try {
+        const settingsRes = await apiGet('getSettings');
+        currentSettings = settingsRes.status === 'success' ? settingsRes.data : dummySettings;
+        renderContactInfo();
+        const catRes = await apiGet('getCategories');
+        currentCategories = catRes.status==='success' && Array.isArray(catRes.data) ? catRes.data : dummyCategories;
+        renderCategorySelect();
+      } catch(err) {
+        console.error(err);
+        currentSettings = dummySettings;
+        currentCategories = dummyCategories;
+        renderContactInfo();
+        renderCategorySelect();
+      }
+    }
+
+    async function refreshAll() {
+      await refreshPublicData();
+      if(currentUser) await loadDashboardData();
+      showToast('Data berhasil dimuat ulang');
+    }
+
+    async function loadDashboardData() {
+      const reportsRes = await apiGet('getAllReports');
+      currentReports = reportsRes.status === 'success' ? reportsRes.data : [];
+      const totalEl = document.getElementById('public-stat-total'); 
+      if(totalEl) totalEl.innerText = currentReports.length;
+      const doneEl = document.getElementById('public-stat-selesai'); 
+      if(doneEl) doneEl.innerText = currentReports.filter(r => String(r.status || '').toLowerCase() === 'selesai').length;
+      renderReportTable();
+      
+      const isAdmin = currentUser && String(currentUser.role || '').toLowerCase() === 'admin';
+      if(currentUser && isAdmin) {
+        const usersRes = await apiGet('getUsers');
+        currentUsers = usersRes.status === 'success' ? usersRes.data : [];
+        renderUserTable();
+        renderSettingsForm();
+        renderCategoryList();
+      }
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.content-tab').forEach(el => el.classList.add('hidden'));
+      const activeTab = document.getElementById('tab-'+tabName);
+      if (activeTab) activeTab.classList.remove('hidden');
+      
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-red-800', 'text-white');
+        btn.classList.add('text-red-100', 'hover:bg-red-800', 'hover:text-white');
+      });
+      const nav = document.getElementById('nav-'+tabName);
+      if(nav) {
+        nav.classList.add('bg-red-800', 'text-white');
+        nav.classList.remove('text-red-100');
+      }
+    }
+
+    function toggleMobileMenu() {
+      document.getElementById('mobile-menu').classList.toggle('hidden');
+      document.getElementById('menu-icon').classList.toggle('fa-bars');
+      document.getElementById('menu-icon').classList.toggle('fa-xmark');
+    }
+
+    function showToast(message, type='success') {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      const cls = type === 'error' ? 'bg-rose-50 text-rose-900 border-rose-200' : type === 'info' ? 'bg-blue-50 text-blue-900 border-blue-200' : 'bg-emerald-50 text-emerald-900 border-emerald-200';
+      const icon = type === 'error' ? 'fa-circle-xmark' : type === 'info' ? 'fa-circle-info' : 'fa-circle-check';
+      t.className = `p-4 rounded-xl shadow-lg border text-xs font-semibold flex items-center gap-2 pointer-events-auto max-w-sm ${cls}`;
+      t.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHtml(message)}</span>`;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3500);
+    }
+
+    function confirmAction(title, message, callback) {
+      document.getElementById('confirm-title').innerText = title;
+      document.getElementById('confirm-message').innerText = message;
+      document.getElementById('confirm-modal').classList.remove('hidden');
+      const cancel = document.getElementById('confirm-cancel'), ok = document.getElementById('confirm-ok');
+      const cleanup = () => {
+        document.getElementById('confirm-modal').classList.add('hidden');
+        cancel.onclick = null;
+        ok.onclick = null;
+      };
+      cancel.onclick = cleanup;
+      ok.onclick = () => {
+        cleanup();
+        callback();
+      };
+    }
+
+    function escapeHtml(v) {
+      return String(v??'').replace(/[&<>'"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[s]));
+    }
+
+    function formatDate(v) {
+      if(!v) return '-';
+      try {
+        return new Date(v).toLocaleString('id-ID', {dateStyle:'medium', timeStyle:'short'});
+      } catch(e) {
+        return v;
+      }
+    }
+
+    function statusBadge(status) {
+      const map = {Pending:'bg-amber-100 text-amber-800', Diproses:'bg-blue-100 text-blue-800', Selesai:'bg-green-100 text-green-800', Ditolak:'bg-rose-100 text-rose-800'};
+      return `<span class="px-2.5 py-1 rounded-full text-xs font-bold ${map[status] || 'bg-slate-100 text-slate-700'}">${escapeHtml(status||'-')}</span>`;
+    }
+
+    function generateTicketId() {
+      return 'KPU-TJT-2026-' + String(Date.now()).slice(-4);
+    }
+
+    function formatIncidentDate(value) {
+      if(!value) return '-';
+      const parts = String(value).split('-');
+      if(parts.length !== 3) return value;
+      const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return date.toLocaleDateString('id-ID', {day:'2-digit', month:'long', year:'numeric'});
+    }
+
+    function buildOfficeWhatsAppUrl(item) {
+      const officeNumber = normalizeWaNumber(currentSettings.contact_phone || '');
+      if(!officeNumber) return '';
+      const message = [
+        '*NOTIFIKASI PENGADUAN BARU*',
+        '',
+        'Nama Pelapor: ' + (item.nama_pelapor || '-'),
+        'Kategori Aduan: ' + (item.kategori || '-'),
+        'Tanggal Kejadian: ' + formatIncidentDate(item.tanggal_kejadian),
+        'Tempat Kejadian: ' + (item.lokasi_kejadian || '-'),
+        'Nomor Tiket: ' + (item.ticket_id || '-')
+      ].join('\n');
+      return `https://wa.me/${officeNumber}?text=${encodeURIComponent(message)}`;
+    }
+
+    function getReporterWhatsApp(report) {
+      const accounts = getCitizenAccounts();
+      const account = accounts.find(a =>
+        (report.pelapor_nik && String(a.nik) === String(report.pelapor_nik)) ||
+        (report.pelapor_username && String(a.username || '').toLowerCase() === String(report.pelapor_username).toLowerCase()) ||
+        (report.pelapor_email && String(a.email || '').toLowerCase() === String(report.pelapor_email).toLowerCase())
+      ) || accounts.find(a => String(a.nama || '').trim().toLowerCase() === String(report.nama_pelapor || '').trim().toLowerCase());
+      return String(account?.telepon || report.no_wa_pelapor || report.kontak_pelapor || '').trim();
+    }
+
+    function buildReporterReplyWhatsAppUrl(report) {
+      const number = normalizeWaNumber(getReporterWhatsApp(report));
+      if(!number) return '';
+      const message = [
+        'Terima kasih atas laporan Anda.',
+        `Nomor tiket: *#${report.ticket_id || '-'}*.`,
+        'Silakan pantau perkembangan aduan Anda pada tombol Lacak Aduan.'
+      ].join('\n');
+      return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+    }
+
+    function openReporterWhatsApp(ticketId) {
+      const report = currentReports.find(r => String(r.ticket_id) === String(ticketId));
+      if(!report) {
+        showToast('Data laporan tidak ditemukan.', 'error');
+        return;
+      }
+      const url = buildReporterReplyWhatsAppUrl(report);
+      if(!url) {
+        showToast('Nomor WhatsApp aktif pelapor tidak ditemukan pada daftar akun.', 'error');
+        return;
+      }
+      window.open(url, '_blank', 'noopener');
+    }
+
+    function normalizeWaNumber(num) {
+      let n = String(num||'').replace(/[^0-9]/g,''); 
+      if(n.startsWith('0')) n = '62' + n.slice(1); 
+      return n;
+    }
+
+    function renderPublicDisplay() {
+      const title = currentSettings.public_service_title||'Layanan Pengaduan Masyarakat';
+      const desc = currentSettings.public_service_desc||'Sampaikan aduan, kendala, atau masukan terkait pelayanan, administrasi, logistik, dan penyelenggaraan Pemilu di wilayah Kabupaten Tanjung Jabung Timur.';
+      const t = document.getElementById('public-service-title'); 
+      if(t) t.innerText = title;
+      const d = document.getElementById('public-service-desc'); 
+      if(d) d.innerText = desc;
+    }
+
+    function applyUploadedLogo(source) {
+      const logoSource = source || DEFAULT_LOGO_URL;
+      document.querySelectorAll('[data-app-logo]').forEach(img => { img.src = logoSource; });
+      const removeButton = document.getElementById('btn-remove-logo');
+      if(removeButton) removeButton.classList.toggle('hidden', !pendingLogoData);
+    }
+
+    function compressLogo(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('File logo tidak dapat dibaca.'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Format gambar logo tidak valid.'));
+          img.onload = () => {
+            const maxSize = 320;
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/webp', 0.88));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleLogoUpload(event) {
+      const file = event.target.files?.[0];
+      if(!file) return;
+      if(!file.type.startsWith('image/')) {
+        event.target.value = '';
+        showToast('Pilih file gambar yang valid.', 'error');
+        return;
+      }
+      if(file.size > 5 * 1024 * 1024) {
+        event.target.value = '';
+        showToast('Ukuran logo maksimal 5 MB.', 'error');
+        return;
+      }
+      try {
+        pendingLogoData = await compressLogo(file);
+        applyUploadedLogo(pendingLogoData);
+        showToast('Pratinjau logo siap. Klik Simpan Kontak & WA untuk menyimpan.', 'info');
+      } catch(error) {
+        event.target.value = '';
+        showToast(error.message || 'Logo gagal diproses.', 'error');
+      }
+    }
+
+    async function removeUploadedLogo() {
+      const res = await apiPost({action:'removeLogo'});
+      if(res.status !== 'success') return showToast(res.message || 'Gagal menghapus logo.', 'error');
+      pendingLogoData=''; currentSettings.logo_url=''; localStorage.removeItem(LOGO_STORAGE_KEY);
+      const input=document.getElementById('setting-logo-file'); if(input) input.value='';
+      applyUploadedLogo(DEFAULT_LOGO_URL); showToast('Logo upload dihapus.', 'info');
+    }
+
+    function renderContactInfo() {
+      document.getElementById('contact-address').innerText = currentSettings.contact_address||'-';
+      const phoneEl = document.getElementById('contact-phone');
+      if(phoneEl) {
+        const p = currentSettings.contact_phone||'-'; 
+        phoneEl.innerText = p; 
+        const wa = normalizeWaNumber(p); 
+        phoneEl.href = wa ? `https://wa.me/${wa}` : '#';
+      }
+      applyUploadedLogo(currentSettings.logo_url || pendingLogoData || DEFAULT_LOGO_URL);
+      renderPublicDisplay();
+    }
+
+    function renderCategorySelect() {
+      document.getElementById('kategori').innerHTML = '<option value="" disabled selected>Pilih Kategori...</option>' + currentCategories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    }
+
+    function setPelaporType(type) {
+      pelaporType = type;
+      document.getElementById('wrapper-identitas').classList.toggle('hidden', type === 'anonim');
+      document.getElementById('pelapor-anonim').className = type === 'anonim' ? 'px-3 py-1.5 text-xs font-semibold rounded-lg border bg-red-100 text-red-900 border-red-200 shadow-sm' : 'px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white text-slate-600 border-slate-200';
+      document.getElementById('pelapor-biasa').className = type === 'biasa' ? 'px-3 py-1.5 text-xs font-semibold rounded-lg border bg-red-100 text-red-900 border-red-200 shadow-sm' : 'px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white text-slate-600 border-slate-200';
+    }
+
+    async function handleLapor(e) {
+      e.preventDefault();
+      if(!currentUser || String(currentUser.role||'').toLowerCase() !== 'masyarakat') {
+        showToast('Silakan masuk dengan akun masyarakat terlebih dahulu.', 'error');
+        window.location.hash = '#login';
+        return;
+      }
+      const btn = document.getElementById('btn-submit-lapor');
+      const officeNumber = normalizeWaNumber(currentSettings.contact_phone || '');
+      const waWindow = officeNumber ? window.open('about:blank', 'kpu_pengaduan_whatsapp') : null;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengirim Laporan...';
+      try {
+        const item = {
+          ticket_id: generateTicketId(),
+          tanggal_masuk: new Date().toISOString(),
+          tanggal_kejadian: document.getElementById('tanggal_kejadian').value,
+          lokasi_kejadian: document.getElementById('lokasi_kejadian').value.trim(),
+          kategori: document.getElementById('kategori').value,
+          subjek: document.getElementById('subjek').value.trim(),
+          deskripsi: document.getElementById('deskripsi').value.trim(),
+          nama_pelapor: pelaporType === 'anonim' ? 'Rahasia / Anonim' : (document.getElementById('nama_pelapor').value.trim()||'Rahasia / Anonim'),
+          pelapor_nik: currentUser.nik || '',
+          pelapor_username: currentUser.username || '',
+          pelapor_email: currentUser.email || '',
+          kontak_pelapor: currentUser.telepon || document.getElementById('kontak_pelapor').value.trim() || '-',
+          no_wa_pelapor: currentUser.telepon || document.getElementById('kontak_pelapor').value.trim() || '-',
+
+          bukti_link: document.getElementById('bukti_link').value.trim(),
+          status: 'Pending',
+          tanggapan_admin: '',
+          tanggal_update: ''
+        };
+        const res = await apiPost({action:'submitReport', data:item});
+        if(res.status === 'success') {
+          const waUrl = buildOfficeWhatsAppUrl(item);
+          if(waUrl) {
+            if(waWindow && !waWindow.closed) {
+              waWindow.opener = null;
+              waWindow.location.href = waUrl;
+            } else {
+              const waLink = document.createElement('a');
+              waLink.href = waUrl;
+              waLink.target = '_blank';
+              waLink.rel = 'noopener';
+              document.body.appendChild(waLink);
+              waLink.click();
+              waLink.remove();
+            }
+          } else if(waWindow && !waWindow.closed) {
+            waWindow.close();
+          }
+          showToast('Laporan tersimpan. WhatsApp kantor dibuka dengan notifikasi siap dikirim. ID Tiket: ' + item.ticket_id);
+          document.getElementById('form-pengaduan').reset();
+          setPelaporType('biasa');
+          document.getElementById('nama_pelapor').value = currentUser.nama || '';
+          document.getElementById('kontak_pelapor').value = currentUser.telepon || '';
+          document.getElementById('input-ticket-id').value = item.ticket_id;
+          window.location.hash = '#lacak';
+        } else {
+          if(waWindow && !waWindow.closed) waWindow.close();
+          showToast(res.message||'Gagal mengirim laporan', 'error');
+        }
+      } catch(err) {
+        if(waWindow && !waWindow.closed) waWindow.close();
+        showToast('Koneksi ke server gagal', 'error');
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Kirim Laporan Pengaduan';
+      }
+    }
+
+    async function handleLacak() {
+      const ticketId = document.getElementById('input-ticket-id').value.trim();
+      if(!ticketId) {
+        showToast('Masukkan kode tiket terlebih dahulu', 'error');
+        return;
+      }
+      const box = document.getElementById('tracking-result');
+      box.classList.remove('hidden');
+      box.innerHTML = '<div class="p-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i>Memuat data tiket...</div>';
+      try {
+        const res = await apiGet('trackReport', {ticketId});
+        if(res.status !== 'success') {
+          box.innerHTML = '<div class="p-8 text-center text-rose-750 font-bold"><i class="fa-solid fa-circle-xmark text-3xl mb-2 block"></i>Tiket tidak ditemukan. Silakan periksa kembali kode Anda.</div>';
+          return;
+        }
+        const d = res.data;
+        box.innerHTML = `
+          <div class="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <span class="text-xs text-slate-400 font-medium font-mono uppercase">Kode Tiket</span>
+              <h3 class="text-lg font-bold font-mono text-red-900">${escapeHtml(d.ticket_id)}</h3>
+            </div>
+            ${statusBadge(d.status)}
+          </div>
+          <div class="p-6 space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Tanggal Masuk</span>
+                <span class="font-semibold text-slate-700">${formatDate(d.tanggal_masuk)}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Kategori</span>
+                <span class="font-semibold text-slate-700">${escapeHtml(d.kategori)}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Tanggal Kejadian</span>
+                <span class="font-semibold text-slate-700">${escapeHtml(formatIncidentDate(d.tanggal_kejadian))}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Lokasi Kejadian</span>
+                <span class="font-semibold text-slate-700">${escapeHtml(d.lokasi_kejadian || '-')}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Pelapor</span>
+                <span class="font-semibold text-slate-700">${escapeHtml(d.nama_pelapor)}</span>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400 font-medium">Lampiran Bukti</span>
+                ${d.bukti_link ? `<a href="${escapeHtml(d.bukti_link)}" target="_blank" class="font-semibold text-red-800 underline">Buka Link Bukti</a>` : '<span class="font-semibold text-slate-700">-</span>'}
+              </div>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-slate-800 mb-2">Subjek Aduan:</h4>
+              <p class="text-sm text-slate-600 bg-white border border-slate-100 p-3 rounded-lg font-medium">${escapeHtml(d.subjek)}</p>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-slate-800 mb-2">Uraian Kejadian:</h4>
+              <p class="text-sm text-slate-600 bg-white border border-slate-100 p-4 rounded-lg leading-relaxed whitespace-pre-line">${escapeHtml(d.deskripsi)}</p>
+            </div>
+            <div class="bg-amber-50 p-4 rounded-xl border border-amber-100">
+              <h4 class="text-sm font-bold text-amber-950 mb-2"><i class="fa-solid fa-bullhorn text-amber-700 mr-1"></i>Tanggapan Resmi Petugas:</h4>
+              <p class="text-sm text-slate-700 whitespace-pre-line">${escapeHtml(d.tanggapan_admin || 'Laporan sedang diverifikasi oleh staf teknis KPU.')}</p>
+            </div>
+          </div>
+        `;
+      } catch(err) {
+        box.innerHTML = '<div class="p-8 text-center text-rose-700 font-bold">Gagal terhubung dengan server pengaduan.</div>';
+        console.error(err);
+      }
+    }
+
+    function getCitizenAccounts() { return Array.isArray(citizenAccounts) ? citizenAccounts : []; }
+
+    function togglePassword(id, button) {
+      const input = document.getElementById(id);
+      input.type = input.type === 'password' ? 'text' : 'password';
+      const icon = button.querySelector('i');
+      icon.classList.toggle('fa-eye'); icon.classList.toggle('fa-eye-slash');
+    }
+
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-submit-login');
+      const username = document.getElementById('username').value.trim().toLowerCase();
+      const password = document.getElementById('password').value;
+      if(!username || !password) return showToast('Username dan password wajib diisi.', 'error');
+      if(!GAS_URL || GAS_URL.includes('PASTE_URL_WEB_APP')) {
+        return showToast('URL Web App Google Apps Script belum dipasang pada GAS_URL.', 'error');
+      }
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>Memeriksa...';
+      try {
+        const staffRes = await apiGet('login', {username, password});
+        const role = String(staffRes?.data?.role || '').toLowerCase();
+        if(staffRes.status === 'success' && ['admin','petugas'].includes(role)) {
+          currentUser = staffRes.data;
+          localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+          await enterDashboard(currentUser);
+          showToast('Login admin/petugas berhasil.');
+          return;
+        }
+        currentUser = null;
+        localStorage.removeItem('kpu_current_user');
+        showToast(staffRes.message || 'Username atau password admin/petugas salah.', 'error');
+      } catch(err) {
+        console.error('Login error:', err);
+        showToast('Backend tidak dapat dihubungi. Periksa GAS_URL dan deployment Google Apps Script.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk';
+      }
+    }
+
+    function updateComplaintAccess() {
+      const form = document.getElementById('form-pengaduan');
+      if(form) form.classList.remove('hidden');
+      const nama = document.getElementById('nama_pelapor');
+      const kontak = document.getElementById('kontak_pelapor');
+      if(nama) nama.readOnly = false;
+      if(kontak) kontak.readOnly = false;
+    }
+
+    async function enterDashboard(user) {
+      currentUser = user;
+      localStorage.setItem('kpu_current_user', JSON.stringify(currentUser));
+      
+      document.getElementById('admin-display-name').innerText = user.nama_petugas||user.username; 
+      const sideName = document.getElementById('admin-display-name-sidebar'); 
+      if(sideName) sideName.innerText = user.nama_petugas||user.username;
+      document.getElementById('role-badge').innerText = user.role||'-';
+      
+      document.getElementById('nav-logout').classList.remove('hidden');
+      document.getElementById('nav-logout-mobile').classList.remove('hidden');
+      document.getElementById('nav-dashboard').classList.remove('hidden');
+      
+      const navDbMobile = document.getElementById('nav-dashboard-mobile');
+      if(navDbMobile) navDbMobile.classList.remove('hidden');
+
+      const isAdmin = String(user.role || '').toLowerCase() === 'admin';
+      document.getElementById('admin-menu').classList.remove('hidden');
+      document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
+      
+      switchTab('dashboard');
+      switchAdminView('laporan');
+      await loadDashboardData();
+    }
+
+    function logout() {
+      currentUser = null; localStorage.removeItem('kpu_current_user');
+      ['nav-logout','nav-logout-mobile','nav-dashboard','nav-dashboard-mobile'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+      ['nav-login','nav-login-mobile'].forEach(id => document.getElementById(id)?.classList.remove('hidden'));
+      document.getElementById('admin-menu').classList.add('hidden');
+      document.getElementById('form-pengaduan')?.reset();
+      updateComplaintAccess();
+      // Tampilkan halaman masuk secara langsung. Ini tetap bekerja meskipun hash URL sudah #login.
+      switchTab('login');
+      if (window.location.hash !== '#login') window.location.hash = '#login';
+      showToast('Sesi login telah ditutup.', 'info');
+    }
+
+    function switchAdminView(name) {
+      const isAdmin = currentUser && String(currentUser.role||'').toLowerCase() === 'admin';
+      if(!isAdmin && name !== 'laporan') {
+        name = 'laporan';
+        showToast('Akses dibatasi. Hanya Admin yang dapat mengonfigurasi pengaturan.', 'info');
+      }
+      document.querySelectorAll('.admin-view').forEach(el => el.classList.add('hidden'));
+      document.getElementById('admin-view-'+name).classList.remove('hidden');
+      
+      document.querySelectorAll('#admin-menu button[id^="admin-menu-"]').forEach(btn => btn.classList.remove('active'));
+      const active = document.getElementById('admin-menu-'+name);
+      if(active) active.classList.add('active');
+      
+      if(name === 'kontak') renderSettingsForm();
+      if(name === 'kategori') renderCategoryList();
+      if(name === 'publik') renderPublicSettingsForm();
+      if(name === 'akun') renderUserTable();
+      if(name === 'pelapor') renderCitizenTable();
+    }
+
+    function renderCitizenTable() {
+      const accounts = getCitizenAccounts();
+      citizenAccounts = accounts;
+      const q = (document.getElementById('search-citizen')?.value || '').trim().toLowerCase();
+      const data = accounts.filter(a => [a.nama,a.nik,a.username,a.email,a.telepon,a.tempat_tinggal,a.pekerjaan].join(' ').toLowerCase().includes(q));
+      const count = document.getElementById('citizen-count');
+      const tbody = document.getElementById('citizen-table');
+      const empty = document.getElementById('no-citizen');
+      if(count) count.innerText = accounts.length + ' akun';
+      if(!tbody || !empty) return;
+      empty.classList.toggle('hidden', data.length > 0);
+      tbody.innerHTML = data.map(a => {
+        const party = a.pihak_konfirmasi;
+        return `
+          <tr class="align-top hover:bg-slate-50 transition">
+            <td class="py-4 px-4"><strong class="text-slate-800">${escapeHtml(a.nama || '-')}</strong><br><span class="text-xs text-slate-500">NIK: ${escapeHtml(a.nik || '-')}</span></td>
+            <td class="py-4 px-4"><span class="font-bold text-red-900">@${escapeHtml(a.username || '-')}</span><br><span class="text-xs text-slate-600">${escapeHtml(a.email || '-')}</span><br><span class="text-xs text-slate-600"><i class="fa-brands fa-whatsapp text-green-600 mr-1"></i>${escapeHtml(a.telepon || '-')}</span></td>
+            <td class="py-4 px-4"><span class="text-slate-700">${escapeHtml(a.tempat_tinggal || '-')}</span><br><span class="text-xs text-slate-500">Lahir: ${escapeHtml(formatIncidentDate(a.tanggal_lahir))}</span></td>
+            <td class="py-4 px-4"><span class="text-slate-700">${escapeHtml(a.jenis_kelamin || '-')}</span><br><span class="text-xs text-slate-500">${escapeHtml(a.pekerjaan || '-')}</span><br><span class="text-xs text-slate-500">Disabilitas: ${escapeHtml(a.disabilitas || '-')}</span></td>
+            <td class="py-4 px-4">${party ? `<strong class="text-slate-700">${escapeHtml(party.nama || '-')}</strong><br><span class="text-xs text-slate-500">${escapeHtml(party.email || '-')}</span><br><span class="text-xs text-slate-500">${escapeHtml(party.telepon || '-')}</span>` : '<span class="text-slate-400">Tidak ada</span>'}</td>
+            <td class="py-4 px-4 text-xs text-slate-600">${formatDate(a.created_at)}</td>
+            <td class="py-4 px-4 text-center">
+              <button type="button" onclick="deleteCitizenAccount('${escapeHtml(a.nik || '')}')" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition shadow-sm" title="Hapus data pelapor" aria-label="Hapus data pelapor ${escapeHtml(a.nama || '')}">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function deleteCitizenAccount(nik) {
+      const account = citizenAccounts.find(a => String(a.nik) === String(nik));
+      if(!account) return showToast('Data pelapor tidak ditemukan.', 'error');
+      confirmAction('Hapus Data Pelapor', `Hapus akun pelapor "${account.nama}"?`, async () => {
+        const res = await apiPost({action:'deleteCitizen',nik});
+        if(res.status === 'success') { citizenAccounts=citizenAccounts.filter(a=>String(a.nik)!==String(nik)); renderCitizenTable(); showToast('Data pelapor berhasil dihapus.'); }
+        else showToast(res.message || 'Gagal menghapus data pelapor.', 'error');
+      });
+    }
+
+    window.addEventListener('storage', event => {
+      if(event.key === 'kpu_citizen_accounts') {
+        citizenAccounts = getCitizenAccounts();
+        if(!document.getElementById('admin-view-pelapor')?.classList.contains('hidden')) renderCitizenTable();
+      }
+    });
+
+    function renderReportTable() {
+      const q = (document.getElementById('search-report')?.value||'').toLowerCase();
+      const f = document.getElementById('filter-status')?.value||'semua';
+      const data = currentReports.filter(r => {
+        const text = [r.ticket_id, r.nama_pelapor, getReporterWhatsApp(r), r.kategori, r.subjek, r.status].join(' ').toLowerCase();
+        return text.includes(q) && (f === 'semua' || String(r.status||'').toLowerCase() === String(f).toLowerCase());
+      });
+      
+      document.getElementById('stat-total').innerText = currentReports.length;
+      document.getElementById('stat-pending').innerText = currentReports.filter(x => String(x.status||'').toLowerCase() === 'pending').length;
+      document.getElementById('stat-diproses').innerText = currentReports.filter(x => String(x.status||'').toLowerCase() === 'diproses').length;
+      document.getElementById('stat-selesai').innerText = currentReports.filter(x => String(x.status||'').toLowerCase() === 'selesai').length;
+      document.getElementById('stat-ditolak').innerText = currentReports.filter(x => String(x.status||'').toLowerCase() === 'ditolak').length;
+      
+      document.getElementById('no-report').classList.toggle('hidden', data.length > 0);
+      
+      /* PERBAIKAN: Role Admin memunculkan tombol hapus pada Daftar Aduan (Kolom Aksi) */
+      const isAdmin = currentUser && String(currentUser.role||'').toLowerCase() === 'admin';
+
+      document.getElementById('admin-table-body').innerHTML = data.map(r => `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+          <td class="py-3 px-6">
+            <b class="font-mono text-red-900">${escapeHtml(r.ticket_id)}</b>
+            <br><span class="text-xs text-slate-400">${formatDate(r.tanggal_masuk)}</span>
+          </td>
+          <td class="py-3 px-6 font-semibold text-slate-700">${escapeHtml(r.nama_pelapor)}</td>
+          <td class="py-3 px-6">
+            ${getReporterWhatsApp(r) && getReporterWhatsApp(r) !== '-' ? `<a href="${buildReporterReplyWhatsAppUrl(r)}" target="_blank" rel="noopener" class="font-semibold text-green-700 hover:underline whitespace-nowrap"><i class="fa-brands fa-whatsapp mr-1"></i>${escapeHtml(getReporterWhatsApp(r))}</a>` : '<span class="text-slate-400">-</span>'}
+          </td>
+          <td class="py-3 px-6">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">${escapeHtml(r.kategori)}</span>
+            <br><span class="font-bold text-slate-800 line-clamp-2 mt-1">${escapeHtml(r.subjek)}</span>
+          </td>
+          <td class="py-3 px-6">${statusBadge(r.status)}</td>
+          <td class="py-3 px-6 text-center">
+            <div class="flex justify-center gap-1">
+              <button onclick="openModal('${r.ticket_id}')" class="px-3 py-1.5 bg-red-900 hover:bg-red-800 text-white rounded-lg text-xs font-bold transition shadow-sm" title="Lihat Detail">Detail</button>
+              <button onclick="openReporterWhatsApp('${r.ticket_id}')" class="inline-flex items-center justify-center w-9 h-9 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg transition shadow-sm" title="Kirim WhatsApp ke pelapor" aria-label="Kirim WhatsApp ke pelapor"><i class="fa-brands fa-whatsapp text-base"></i></button>
+              ${isAdmin ? `<button onclick="deleteReport('${r.ticket_id}')" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition shadow-sm" title="Hapus Laporan"><i class="fa-solid fa-trash"></i></button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function openModal(ticketId) {
+      const r = currentReports.find(x => String(x.ticket_id).trim() === String(ticketId).trim());
+      if(!r) {
+        showToast('Data aduan tidak ditemukan', 'error');
+        return;
+      }
+      document.getElementById('modal-title-ticket-id').innerText = r.ticket_id;
+      document.getElementById('modal-title-subject').innerText = r.subjek;
+      document.getElementById('modal-nama').innerText = r.nama_pelapor || '-';
+      document.getElementById('modal-kontak').innerText = getReporterWhatsApp(r) || '-';
+      document.getElementById('modal-kategori').innerText = r.kategori || '-';
+      document.getElementById('modal-tanggal-kejadian').innerText = formatIncidentDate(r.tanggal_kejadian);
+      document.getElementById('modal-lokasi-kejadian').innerText = r.lokasi_kejadian || '-';
+      document.getElementById('modal-bukti').innerHTML = r.bukti_link ? `<a href="${escapeHtml(r.bukti_link)}" target="_blank" class="text-red-850 font-bold underline">Buka Link Bukti</a>` : '-';
+      document.getElementById('modal-deskripsi').innerText = r.deskripsi || '-';
+      document.getElementById('modal-ticket-id').value = r.ticket_id;
+      document.getElementById('modal-status').value = r.status || 'Pending';
+      document.getElementById('modal-tanggapan').value = r.tanggapan_admin || '';
+      document.getElementById('modal-detail').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal-detail').classList.add('hidden');
+    }
+
+    async function saveStatus(e) {
+      e.preventDefault();
+      const payload = {
+        action: 'updateReportStatus',
+        ticketId: document.getElementById('modal-ticket-id').value,
+        status: document.getElementById('modal-status').value,
+        tanggapan: document.getElementById('modal-tanggapan').value
+      };
+      const res = await apiPost(payload);
+      if(res.status === 'success') {
+        showToast('Respon aduan berhasil diperbarui');
+        closeModal();
+        await loadDashboardData();
+      } else {
+        showToast(res.message || 'Gagal menyimpan pembaruan status', 'error');
+      }
+    }
+
+    /* FITUR TAMBAHAN: Hapus Laporan Khusus Admin */
+    function deleteReport(ticketId) {
+      confirmAction('Hapus Aduan', `Apakah Anda yakin ingin menghapus aduan dengan tiket ${ticketId} secara permanen?`, async () => {
+        const res = await apiPost({action:'deleteReport', ticketId: ticketId});
+        if(res.status === 'success') {
+          await loadDashboardData();
+          showToast('Aduan berhasil dihapus.');
+        } else {
+          showToast(res.message || 'Gagal menghapus aduan', 'error');
+        }
+      });
+    }
+
+    function renderSettingsForm() {
+      document.getElementById('setting-address').value = currentSettings.contact_address||'';
+      document.getElementById('setting-phone').value = currentSettings.contact_phone||'';
+      document.getElementById('setting-wa-enabled').value = String(currentSettings.wa_enabled||'false');
+      document.getElementById('setting-wa-token').value = currentSettings.wa_token||'';
+      document.getElementById('setting-wa-target').value = currentSettings.wa_target||'';
+      pendingLogoData = localStorage.getItem(LOGO_STORAGE_KEY) || pendingLogoData || '';
+      applyUploadedLogo(pendingLogoData || DEFAULT_LOGO_URL);
+      renderPublicSettingsForm();
+    }
+
+    function renderPublicSettingsForm() {
+      const titleEl = document.getElementById('public-setting-title'); 
+      if(!titleEl) return;
+      titleEl.value = currentSettings.public_service_title||'Layanan Pengaduan Masyarakat';
+      document.getElementById('public-setting-desc').value = currentSettings.public_service_desc||'';
+    }
+
+    async function savePublicSettings(e) {
+      e.preventDefault();
+      const data = {
+        public_service_title: document.getElementById('public-setting-title').value.trim(),
+        public_service_desc: document.getElementById('public-setting-desc').value.trim()
+      };
+      const res = await apiPost({action:'updateSettings', data});
+      if(res.status === 'success') {
+        currentSettings = {...currentSettings, ...data};
+        renderPublicDisplay();
+        showToast('Pengaturan tampilan publik berhasil diperbarui.');
+      } else {
+        showToast(res.message||'Gagal memperbarui tampilan publik', 'error');
+      }
+    }
+
+    async function saveContactSettings(e) {
+      e.preventDefault();
+      const data = {
+        contact_address: document.getElementById('setting-address').value,
+        contact_phone: document.getElementById('setting-phone').value,
+        wa_enabled: document.getElementById('setting-wa-enabled').value,
+        wa_token: document.getElementById('setting-wa-token').value.trim(),
+        wa_target: document.getElementById('setting-wa-target').value.trim()
+      };
+      if(pendingLogoData && pendingLogoData.startsWith('data:image/')) {
+        const logoRes = await apiPost({action:'uploadLogo', dataUrl:pendingLogoData, fileName:'logo-aplikasi'});
+        if(logoRes.status !== 'success') return showToast(logoRes.message || 'Upload logo gagal.', 'error');
+        data.logo_url = logoRes.data.logo_url;
+        pendingLogoData = data.logo_url;
+      }
+      const res = await apiPost({action:'updateSettings', data});
+      if(res.status === 'success') {
+        currentSettings = {...currentSettings, ...data};
+        currentSettings.logo_url = data.logo_url || currentSettings.logo_url || '';
+        applyUploadedLogo(currentSettings.logo_url || DEFAULT_LOGO_URL);
+        renderContactInfo();
+        showToast('Informasi kontak dan logo aplikasi berhasil diperbarui.');
+      } else {
+        showToast(res.message||'Gagal menyimpan pengaturan kontak', 'error');
+      }
+    }
+
+    function renderCategoryList() {
+      document.getElementById('category-list').innerHTML = currentCategories.map((c, idx) => `
+        <div class="flex items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
+          <span class="text-sm font-semibold text-slate-700">
+            <i class="fa-solid fa-tag text-red-900 mr-2"></i>${escapeHtml(c)}
+          </span>
+          <div class="flex gap-1">
+            <button onclick="editCategoryByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition shadow-sm" title="Edit kategori" aria-label="Edit kategori"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteCategoryByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-lg transition shadow-sm" title="Hapus kategori" aria-label="Hapus kategori"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </div>
+      `).join('') || '<div class="text-sm text-slate-400">Belum ada kategori aduan.</div>';
+    }
+
+    function editCategoryByIndex(index) {
+      const name = currentCategories[index];
+      if(!name) return;
+      editingCategoryName = name;
+      document.getElementById('category-name').value = name;
+      document.getElementById('category-name').focus();
+      document.getElementById('btn-save-category').innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> Update Kategori';
+      showToast('Kategori dimuat ke form input. Edit lalu simpan kembali.', 'info');
+    }
+
+    async function saveCategory(e) {
+      e.preventDefault();
+      const name = document.getElementById('category-name').value.trim();
+      if(!name) {
+        showToast('Masukkan nama kategori terlebih dahulu', 'error');
+        return;
+      }
+      const res = await apiPost({action:'saveCategory', data:{kategori:name, oldKategori:editingCategoryName}});
+      if(res.status === 'success') {
+        document.getElementById('category-name').value = '';
+        editingCategoryName = '';
+        document.getElementById('btn-save-category').innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> Simpan Kategori';
+        await refreshPublicData();
+        renderCategoryList();
+        renderCategorySelect();
+        showToast('Kategori aduan berhasil disimpan.');
+      } else {
+        showToast(res.message||'Gagal menyimpan kategori', 'error');
+      }
+    }
+
+    function deleteCategoryByIndex(index) {
+      const name = currentCategories[index];
+      if(!name) return;
+      confirmAction('Hapus Kategori', `Apakah Anda yakin ingin menghapus kategori aduan "${name}"?`, async () => {
+        const res = await apiPost({action:'deleteCategory', kategori:name});
+        if(res.status === 'success') {
+          await refreshPublicData();
+          renderCategoryList();
+          showToast('Kategori telah dihapus dari sistem.');
+        } else {
+          showToast(res.message||'Gagal menghapus kategori', 'error');
+        }
+      });
+    }
+
+    function renderUserTable() {
+      document.getElementById('user-table').innerHTML = currentUsers.map((u, idx) => `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+          <td class="py-3 px-6 font-mono font-bold text-red-900">${escapeHtml(u.username)}</td>
+          <td class="py-3 px-6 text-slate-700 font-semibold">${escapeHtml(u.nama_petugas)}</td>
+          <td class="py-3 px-6">
+            <span class="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 text-xs font-bold">${escapeHtml(u.role)}</span>
+          </td>
+          <td class="py-3 px-6 text-center flex justify-center gap-2">
+            <button onclick="editUserByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-blue-100 hover:bg-blue-200 text-blue-750 rounded-lg transition shadow-sm" title="Edit akun" aria-label="Edit akun"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="deleteUserByIndex(${idx})" class="inline-flex items-center justify-center w-9 h-9 bg-rose-100 hover:bg-rose-200 text-rose-750 rounded-lg transition shadow-sm" title="Hapus akun" aria-label="Hapus akun"><i class="fa-solid fa-trash"></i></button>
+          </td>
+        </tr>
+      `).join('') || '<tr><td colspan="4" class="p-6 text-center text-slate-400">Belum ada akun terdaftar.</td></tr>';
+    }
+
+    function editUserByIndex(index) {
+      const u = currentUsers[index];
+      if(!u) return;
+      document.getElementById('user-username').value = u.username;
+      document.getElementById('user-password').value = u.password;
+      document.getElementById('user-name').value = u.nama_petugas;
+      document.getElementById('user-role').value = u.role;
+      document.getElementById('btn-save-user').innerHTML = '<i class="fa-solid fa-user-pen mr-1"></i> Update Akun';
+      showToast('Data akun dimuat ke form input', 'info');
+    }
+
+    async function saveUser(e) {
+      e.preventDefault();
+      const data = {
+        username: document.getElementById('user-username').value.trim().toLowerCase(),
+        password: document.getElementById('user-password').value.trim(),
+        nama_petugas: document.getElementById('user-name').value.trim(),
+        role: document.getElementById('user-role').value
+      };
+      const res = await apiPost({action:'saveUser', data});
+      if(res.status === 'success') {
+        document.querySelector('#admin-view-akun form').reset();
+        document.getElementById('btn-save-user').innerHTML = '<i class="fa-solid fa-user-plus mr-1"></i> Tambah / Simpan Akun';
+        await loadDashboardData();
+        showToast('Data akun petugas berhasil disimpan.');
+      } else {
+        showToast(res.message||'Gagal menyimpan akun', 'error');
+      }
+    }
+
+    function deleteUserByIndex(index) {
+      const u = currentUsers[index];
+      if(!u) return;
+      if(u.username === 'admin') {
+        showToast('Akun Administrator utama tidak boleh dihapus.', 'error');
+        return;
+      }
+      confirmAction('Hapus Akun Petugas', `Apakah Anda yakin ingin menghapus akun petugas "${u.username}"?`, async () => {
+        const res = await apiPost({action:'deleteUser', username: u.username});
+        if(res.status === 'success') {
+          await loadDashboardData();
+          showToast('Akun petugas berhasil dihapus dari sistem.');
+        } else {
+          showToast(res.message||'Gagal menghapus akun', 'error');
+        }
+      });
+    }
+
+    /* PREVIEW DATABASE SIMULATOR */
+    function previewGet(action, params={}) {
+      if(!window.__preview) {
+        window.__preview = {
+          reports: JSON.parse(JSON.stringify(dummyReports)),
+          users: JSON.parse(JSON.stringify(dummyUsers)),
+          settings: {...dummySettings},
+          categories: [...dummyCategories]
+        };
+      }
+      const db = window.__preview;
+      if(action === 'login') {
+        const inputUser = String(params.username||'').trim().toLowerCase();
+        const inputPass = String(params.password||'').trim();
+        const u = db.users.find(x => String(x.username).trim().toLowerCase() === inputUser && String(x.password).trim() === inputPass);
+        return Promise.resolve(u ? {status:'success', data:{username:u.username, nama_petugas:u.nama_petugas, role:u.role}} : {status:'error', message:'Username atau password salah. Coba: admin / admin2026'});
+      }
+      if(action === 'getSettings') return Promise.resolve({status:'success', data:db.settings});
+      if(action === 'getCategories') return Promise.resolve({status:'success', data:db.categories});
+      if(action === 'getAllReports') return Promise.resolve({status:'success', data:[...db.reports].reverse()});
+      if(action === 'getUsers') return Promise.resolve({status:'success', data:db.users});
+      if(action === 'trackReport') {
+        const r = db.reports.find(x => x.ticket_id.toUpperCase() === String(params.ticketId||'').toUpperCase());
+        return Promise.resolve(r ? {status:'success', data:r} : {status:'error', message:'Tiket tidak ditemukan'});
+      }
+      return Promise.resolve({status:'error', message:'Action tidak dikenali.'});
+    }
+
+    function previewPost(payload) {
+      if(!window.__preview) {
+        window.__preview = {
+          reports: JSON.parse(JSON.stringify(dummyReports)),
+          users: JSON.parse(JSON.stringify(dummyUsers)),
+          settings: {...dummySettings},
+          categories: [...dummyCategories]
+        };
+      }
+      const db = window.__preview;
+      if(payload.action === 'submitReport') {
+        db.reports.push(payload.data);
+        return Promise.resolve({status:'success', message:'Aduan berhasil dikirim.'});
+      }
+      if(payload.action === 'updateReportStatus') {
+        const r = db.reports.find(x => x.ticket_id === payload.ticketId);
+        if(!r) return Promise.resolve({status:'error', message:'Tiket tidak ditemukan'});
+        r.status = payload.status;
+        r.tanggapan_admin = payload.tanggapan;
+        r.tanggal_update = new Date().toISOString();
+        return Promise.resolve({status:'success', message:'Status tiket diperbarui.'});
+      }
+      if(payload.action === 'deleteReport') {
+        db.reports = db.reports.filter(x => x.ticket_id !== payload.ticketId);
+        return Promise.resolve({status:'success', message:'Aduan dihapus.'});
+      }
+      if(payload.action === 'updateSettings') {
+        db.settings = {...db.settings, ...payload.data};
+        return Promise.resolve({status:'success', message:'Pengaturan berhasil disimpan.'});
+      }
+      if(payload.action === 'saveCategory') {
+        const k = payload.data.kategori;
+        const old = payload.data.oldKategori;
+        if(old) {
+          const idx = db.categories.findIndex(x => x.toLowerCase() === old.toLowerCase());
+          if(idx >= 0) db.categories.splice(idx, 1, k);
+          else if(!db.categories.includes(k)) db.categories.push(k);
+        } else if(!db.categories.includes(k)) {
+          db.categories.push(k);
+        }
+        return Promise.resolve({status:'success', message:'Kategori disimpan.'});
+      }
+      if(payload.action === 'deleteCategory') {
+        db.categories = db.categories.filter(x => x !== payload.kategori);
+        return Promise.resolve({status:'success', message:'Kategori dihapus.'});
+      }
+      if(payload.action === 'saveUser') {
+        const i = db.users.findIndex(x => x.username.toLowerCase() === payload.data.username.toLowerCase());
+        if(i >= 0) db.users[i] = payload.data;
+        else db.users.push(payload.data);
+        return Promise.resolve({status:'success', message:'Akun berhasil disimpan.'});
+      }
+      if(payload.action === 'deleteUser') {
+        db.users = db.users.filter(x => x.username.toLowerCase() !== payload.username.toLowerCase());
+        return Promise.resolve({status:'success', message:'Akun berhasil dihapus.'});
+      }
+      return Promise.resolve({status:'error', message:'Action tidak dikenali.'});
+    }
+  </script>
+</body>
+</html>
